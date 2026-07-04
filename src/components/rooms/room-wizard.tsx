@@ -21,7 +21,7 @@ import type { Database } from "@/lib/supabase/types";
 type Member = Pick<Database["public"]["Tables"]["members"]["Row"], "id" | "name" | "gender" | "grade">;
 type Grade = Database["public"]["Enums"]["grade"];
 
-const STEPS = ["일정 정보", "경기 규칙", "경기 종류", "확인", "참가자 등록"] as const;
+const STEPS = ["일정 정보", "경기 규칙", "참가자 등록", "경기 종류", "확인"] as const;
 
 const COURT_TYPES: CourtType[] = ["artificial_grass", "hard_court", "clay_court"];
 const DOUBLES_TYPES: MatchType[] = ["mens_doubles", "womens_doubles", "mixed_doubles", "mixed_any_doubles"];
@@ -112,10 +112,17 @@ export function RoomWizard({ members }: { members: Member[] }) {
   const maleMembers = members.filter((m) => m.gender === "male");
   const femaleMembers = members.filter((m) => m.gender === "female");
 
+  const selectedMaleCount = members.filter(
+    (m) => m.gender === "male" && selectedMemberIds.has(m.id)
+  ).length;
+  const selectedFemaleCount = members.filter(
+    (m) => m.gender === "female" && selectedMemberIds.has(m.id)
+  ).length;
+
   function ineligibleReason(type: MatchType): string | null {
     const { male, female } = minGenderCounts(type);
-    if (male > 0 && maleMembers.length < male) return `남자 ${male}명 필요 (현재 회원 ${maleMembers.length}명)`;
-    if (female > 0 && femaleMembers.length < female) return `여자 ${female}명 필요 (현재 회원 ${femaleMembers.length}명)`;
+    if (male > 0 && selectedMaleCount < male) return `남자 ${male}명 필요 (선택됨 ${selectedMaleCount}명)`;
+    if (female > 0 && selectedFemaleCount < female) return `여자 ${female}명 필요 (선택됨 ${selectedFemaleCount}명)`;
     return null;
   }
 
@@ -139,6 +146,9 @@ export function RoomWizard({ members }: { members: Member[] }) {
       if (slotsPerCourt <= 0) return "설정된 시간 안에 경기를 진행할 수 없습니다. 시간을 조정해주세요.";
     }
     if (currentStep === 2) {
+      if (selectedMemberIds.size === 0) return "참가 선수를 1명 이상 선택해주세요.";
+    }
+    if (currentStep === 3) {
       if (selectedMatchTypes.size === 0) return "경기 종류를 1개 이상 선택해주세요.";
       for (const type of selectedMatchTypes) {
         const reason = ineligibleReason(type);
@@ -434,6 +444,33 @@ export function RoomWizard({ members }: { members: Member[] }) {
 
       {step === 2 && (
         <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4">
+          <p className="text-sm text-zinc-500">
+            이번 일정에 참여할 선수를 선택하세요. 방 안에서만 적용되는 등급 조정도 가능합니다.
+          </p>
+          <MemberPickerGroup
+            title="남자"
+            members={maleMembers}
+            selected={selectedMemberIds}
+            overrides={gradeOverrides}
+            onToggle={toggleMember}
+            onGradeChange={(id, g) => setGradeOverrides((prev) => ({ ...prev, [id]: g }))}
+          />
+          <MemberPickerGroup
+            title="여자"
+            members={femaleMembers}
+            selected={selectedMemberIds}
+            overrides={gradeOverrides}
+            onToggle={toggleMember}
+            onGradeChange={(id, g) => setGradeOverrides((prev) => ({ ...prev, [id]: g }))}
+          />
+          <p className="text-sm text-zinc-600">
+            선택됨: {selectedMemberIds.size}명 (남 {selectedMaleCount}명 · 여 {selectedFemaleCount}명)
+          </p>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700">경기 방식</label>
             <div className="flex gap-2">
@@ -466,6 +503,9 @@ export function RoomWizard({ members }: { members: Member[] }) {
             <label className="mb-1 block text-sm font-medium text-zinc-700">
               경기 종류 (다중 선택 가능)
             </label>
+            <p className="mb-2 text-xs text-zinc-400">
+              선택된 참가자 기준 남 {selectedMaleCount}명 · 여 {selectedFemaleCount}명 — 인원이 부족한 종류는 선택할 수 없습니다.
+            </p>
             <div className="flex flex-wrap gap-2">
               {(isDoublesRoom ? DOUBLES_TYPES : SINGLES_TYPES).map((type) => {
                 const reason = ineligibleReason(type);
@@ -493,7 +533,7 @@ export function RoomWizard({ members }: { members: Member[] }) {
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4">
           <h2 className="font-semibold text-zinc-800">설정 요약</h2>
           <dl className="grid grid-cols-2 gap-y-2 text-sm">
@@ -515,6 +555,10 @@ export function RoomWizard({ members }: { members: Member[] }) {
             <dd className="text-zinc-900">
               {gamesPerSet}게임 선승 · {minutesPerMatch}분/경기 · 휴식 {breakMinutes}분 · 몸풀기 {warmupMinutes}분
             </dd>
+            <dt className="text-zinc-500">참가자</dt>
+            <dd className="text-zinc-900">
+              {selectedMemberIds.size}명 (남 {selectedMaleCount}명 · 여 {selectedFemaleCount}명)
+            </dd>
             <dt className="text-zinc-500">경기 종류</dt>
             <dd className="text-zinc-900">
               {Array.from(selectedMatchTypes).map((t) => MATCH_TYPE_LABEL[t]).join(", ")}
@@ -526,33 +570,6 @@ export function RoomWizard({ members }: { members: Member[] }) {
               <strong>{totalMatches}경기</strong>를 대진표에 배치합니다.
             </p>
           </div>
-        </div>
-      )}
-
-      {step === 4 && (
-        <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4">
-          <p className="text-sm text-zinc-500">
-            이번 일정에 참여할 선수를 선택하세요. 방 안에서만 적용되는 등급 조정도 가능합니다.
-          </p>
-          <MemberPickerGroup
-            title="남자"
-            members={maleMembers}
-            selected={selectedMemberIds}
-            overrides={gradeOverrides}
-            onToggle={toggleMember}
-            onGradeChange={(id, g) => setGradeOverrides((prev) => ({ ...prev, [id]: g }))}
-          />
-          <MemberPickerGroup
-            title="여자"
-            members={femaleMembers}
-            selected={selectedMemberIds}
-            overrides={gradeOverrides}
-            onToggle={toggleMember}
-            onGradeChange={(id, g) => setGradeOverrides((prev) => ({ ...prev, [id]: g }))}
-          />
-          <p className="text-sm text-zinc-600">
-            선택됨: {selectedMemberIds.size}명
-          </p>
         </div>
       )}
 

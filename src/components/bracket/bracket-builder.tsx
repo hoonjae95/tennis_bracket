@@ -11,6 +11,7 @@ import {
   GENDER_TEXT_COLOR,
   minGenderCounts,
   type BracketPlayer,
+  type FreePracticeSlot,
   type GeneratedMatch,
   type MatchType,
 } from "@/lib/bracket/types";
@@ -59,6 +60,7 @@ export function BracketBuilder({
   const [generated, setGenerated] = useState<GeneratedMatch[] | null>(
     existingMatches.length > 0 ? mapExistingToGenerated(existingMatches, courts, players) : null
   );
+  const [freePracticeSlots, setFreePracticeSlots] = useState<FreePracticeSlot[]>([]);
   const [isSaving, startSaving] = useTransition();
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -109,6 +111,7 @@ export function BracketBuilder({
       enabledMatchTypes: Array.from(selectedTypes),
     });
     setGenerated(result.matches);
+    setFreePracticeSlots(result.freePracticeSlots);
     setWarnings(result.warnings);
     setSaveMessage(null);
   }
@@ -147,6 +150,17 @@ export function BracketBuilder({
     for (const arr of map.values()) arr.sort((a, b) => a.roundNo - b.roundNo);
     return map;
   }, [generated]);
+
+  const freeSlotsByCourt = useMemo(() => {
+    const map = new Map<number, FreePracticeSlot[]>();
+    for (const s of freePracticeSlots) {
+      const arr = map.get(s.courtIndex) ?? [];
+      arr.push(s);
+      map.set(s.courtIndex, arr);
+    }
+    for (const arr of map.values()) arr.sort((a, b) => a.roundNo - b.roundNo);
+    return map;
+  }, [freePracticeSlots]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -214,16 +228,30 @@ export function BracketBuilder({
           </div>
 
           <div className="flex flex-col gap-4">
-            {courts.map((court, idx) => (
-              <div key={court.id} className="rounded-lg border border-zinc-200 bg-white p-4">
-                <h3 className="mb-2 font-semibold text-zinc-800">코트 {court.name}</h3>
-                <ul className="flex flex-col divide-y divide-zinc-100">
-                  {(matchesByCourt.get(idx) ?? []).map((m, i) => (
-                    <MatchRow key={i} match={m} timeLabel={roundTimeLabel(m.roundNo)} />
-                  ))}
-                </ul>
-              </div>
-            ))}
+            {courts.map((court, idx) => {
+              const rows: Array<
+                | { kind: "match"; roundNo: number; match: GeneratedMatch }
+                | { kind: "free"; roundNo: number }
+              > = [
+                ...(matchesByCourt.get(idx) ?? []).map((m) => ({ kind: "match" as const, roundNo: m.roundNo, match: m })),
+                ...(freeSlotsByCourt.get(idx) ?? []).map((s) => ({ kind: "free" as const, roundNo: s.roundNo })),
+              ].sort((a, b) => a.roundNo - b.roundNo);
+
+              return (
+                <div key={court.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+                  <h3 className="mb-2 font-semibold text-zinc-800">코트 {court.name}</h3>
+                  <ul className="flex flex-col divide-y divide-zinc-100">
+                    {rows.map((row, i) =>
+                      row.kind === "match" ? (
+                        <MatchRow key={i} match={row.match} timeLabel={roundTimeLabel(row.roundNo)} />
+                      ) : (
+                        <FreePracticeRow key={i} roundNo={row.roundNo} timeLabel={roundTimeLabel(row.roundNo)} />
+                      )
+                    )}
+                  </ul>
+                </div>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-3">
@@ -280,6 +308,18 @@ function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: stri
         </span>
       </div>
       {match.note && <p className="mt-1 text-right text-xs text-amber-600">비고: {match.note}</p>}
+    </li>
+  );
+}
+
+function FreePracticeRow({ roundNo, timeLabel }: { roundNo: number; timeLabel: string }) {
+  return (
+    <li className="flex items-center py-2 text-sm">
+      <span className="w-16 shrink-0 text-zinc-400">R{roundNo}</span>
+      <span className="w-28 shrink-0 text-xs text-zinc-400">{timeLabel}</span>
+      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-center text-xs text-zinc-500">
+        자유 랠리 연습
+      </span>
     </li>
   );
 }

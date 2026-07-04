@@ -2,12 +2,15 @@ import {
   type BracketGenerationInput,
   type BracketGenerationResult,
   type BracketPlayer,
+  type FreePracticeSlot,
   type GeneratedMatch,
   type MatchType,
   GRADE_SCORE,
-  isDoubles,
   playersPerTeam,
 } from "@/lib/bracket/types";
+
+// 성별 제약 없이 아무나 짝지을 수 있는 매치타입: 인원 부족 시 자동 폴백용
+const GENDER_FREE_FALLBACK_TYPE: MatchType = "mixed_any_doubles";
 
 const MAX_BALANCE_DIFF = 2; // 팀 간 등급 점수 합 차이 허용 한도
 const MAX_CONSECUTIVE_PLAY = 2; // 연속 출전 최대 (3연속 금지)
@@ -170,7 +173,24 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
   const warnings: string[] = [];
 
   if (enabledMatchTypes.length === 0) {
-    return { matches: [], playerStats: new Map(), warnings: ["경기 종류를 1개 이상 선택해주세요."] };
+    return {
+      matches: [],
+      freePracticeSlots: [],
+      playerStats: new Map(),
+      warnings: ["경기 종류를 1개 이상 선택해주세요."],
+    };
+  }
+
+  // 매치타입별 성별 무관 폴백을 시도할 때, 최소 필요 인원 기준으로 실제 동시에 경기 가능한 코트 수를 계산.
+  // 참가 인원이 코트 수 x 최소인원보다 적으면, 그만큼의 코트는 매 라운드 돌아가며 자유 랠리 연습 코트가 된다.
+  const minTotalNeeded = Math.min(...enabledMatchTypes.map((t) => playersPerTeam(t) * 2));
+  const activeCourtsCount = Math.max(0, Math.min(courtCount, Math.floor(players.length / minTotalNeeded)));
+  const freePracticeCourtsCount = courtCount - activeCourtsCount;
+
+  if (freePracticeCourtsCount > 0) {
+    warnings.push(
+      `참가 인원(${players.length}명)이 코트 ${courtCount}개를 모두 채우기엔 부족해, 매 라운드 ${freePracticeCourtsCount}개 코트가 자유 랠리 연습으로 배정됩니다.`
+    );
   }
 
   const states: PlayerState[] = players.map((p) => ({
@@ -182,11 +202,23 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
 
   const stateById = new Map(states.map((s) => [s.player.roomParticipantId, s]));
   const matches: GeneratedMatch[] = [];
+  const freePracticeSlots: FreePracticeSlot[] = [];
 
   for (let round = 1; round <= slotsPerCourt; round++) {
     const playingThisRound = new Set<string>();
 
+    // 코트를 라운드마다 돌아가며 자유 랠리 연습 코트로 배정 (round-robin)
+    const freeCourtsThisRound = new Set<number>();
+    for (let k = 0; k < freePracticeCourtsCount; k++) {
+      freeCourtsThisRound.add((round - 1 + k) % courtCount);
+    }
+
     for (let court = 0; court < courtCount; court++) {
+      if (freeCourtsThisRound.has(court)) {
+        freePracticeSlots.push({ courtIndex: court, roundNo: round });
+        continue;
+      }
+
       const mustPlay = forcedMustPlay(states);
       const mustRest = forcedMustRest(states);
 
@@ -224,6 +256,21 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
               .map((s) => s.player.name);
             break;
           }
+        }
+      }
+
+      // 특정 성별이 부족해 선택된 매치타입으로는 대진을 못 만드는 경우:
+      // 성별 무관 잡복식으로 자동 전환해서라도 코트를 채운다.
+      if (!picked && !enabledMatchTypes.includes(GENDER_FREE_FALLBACK_TYPE)) {
+        const relaxedPool = states.filter(notPlayingYet);
+        const built =
+          buildMatch(GENDER_FREE_FALLBACK_TYPE, availablePool, mustPlay) ??
+          buildMatch(GENDER_FREE_FALLBACK_TYPE, relaxedPool, mustPlay);
+        if (built) {
+          picked = { type: GENDER_FREE_FALLBACK_TYPE, ...built };
+          forcedNames = [...built.team1, ...built.team2]
+            .filter((s) => mustRest.has(s.player.roomParticipantId))
+            .map((s) => s.player.name);
         }
       }
 
@@ -282,5 +329,5 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
   }
 
   void stateById;
-  return { matches, playerStats, warnings };
+  return { matches, freePracticeSlots, playerStats, warnings };
 }

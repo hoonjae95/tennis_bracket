@@ -246,6 +246,7 @@ export type Database = {
           title: string
           updated_at: string
           warmup_minutes: number
+          wrapup_minutes: number
         }
         Insert: {
           break_minutes?: number
@@ -265,6 +266,7 @@ export type Database = {
           title: string
           updated_at?: string
           warmup_minutes?: number
+          wrapup_minutes?: number
         }
         Update: {
           break_minutes?: number
@@ -284,6 +286,7 @@ export type Database = {
           title?: string
           updated_at?: string
           warmup_minutes?: number
+          wrapup_minutes?: number
         }
         Relationships: []
       }

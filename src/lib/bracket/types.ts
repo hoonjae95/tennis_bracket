@@ -92,8 +92,10 @@ export const COURT_TYPE_LABEL: Record<CourtType, string> = {
 export const MATCH_MINUTES_OPTIONS = [20, 25, 30, 35, 40] as const;
 // 0~15분 (경기 사이 휴식, 0은 휴식 없음)
 export const BREAK_MINUTES_OPTIONS = [0, 5, 10, 15] as const;
-// 5분 단위, 20~40분 (몸풀기)
-export const WARMUP_MINUTES_OPTIONS = [20, 25, 30, 35, 40] as const;
+// 5분 단위, 10~40분 (몸풀기)
+export const WARMUP_MINUTES_OPTIONS = [10, 15, 20, 25, 30, 35, 40] as const;
+// 0~15분 (대회 마무리/시상식 등 종료 직전 버퍼, 0은 사용 안 함)
+export const WRAPUP_MINUTES_OPTIONS = [0, 5, 10, 15] as const;
 
 // 세트당 게임 수에 따른 추천 경기 시간
 export const RECOMMENDED_MINUTES_BY_GAMES: Record<number, number> = {

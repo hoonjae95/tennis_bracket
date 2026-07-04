@@ -4,12 +4,13 @@ export function calcSlotsPerCourt(params: {
   minutesPerMatch: number;
   breakMinutes: number;
   warmupMinutes?: number;
+  wrapupMinutes?: number;
 }): number {
-  const { startTime, endTime, minutesPerMatch, breakMinutes, warmupMinutes = 0 } = params;
+  const { startTime, endTime, minutesPerMatch, breakMinutes, warmupMinutes = 0, wrapupMinutes = 0 } = params;
 
   const [sh, sm] = startTime.split(":").map(Number);
   const [eh, em] = endTime.split(":").map(Number);
-  const totalMinutes = eh * 60 + em - (sh * 60 + sm) - warmupMinutes;
+  const totalMinutes = eh * 60 + em - (sh * 60 + sm) - warmupMinutes - wrapupMinutes;
   if (totalMinutes <= 0 || minutesPerMatch <= 0) return 0;
 
   const slotLength = minutesPerMatch + breakMinutes;

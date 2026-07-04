@@ -10,11 +10,13 @@ import {
   MATCH_MINUTES_OPTIONS,
   BREAK_MINUTES_OPTIONS,
   WARMUP_MINUTES_OPTIONS,
+  WRAPUP_MINUTES_OPTIONS,
   RECOMMENDED_MINUTES_BY_GAMES,
   MATCH_TYPE_LABEL,
   minGenderCounts,
   isDoubles,
   type CourtType,
+  type FairnessMode,
   type MatchType,
 } from "@/lib/bracket/types";
 import type { Database } from "@/lib/supabase/types";
@@ -47,7 +49,9 @@ export type RoomWizardInitialData = {
   minutesPerMatch: number;
   breakMinutes: number;
   warmupMinutes: number;
+  wrapupMinutes: number;
   matchTypes: MatchType[];
+  fairnessMode: FairnessMode;
   participantMemberIds: string[];
   gradeOverrides: Record<string, Grade | null>;
 };
@@ -77,12 +81,14 @@ export function RoomWizard({
     initialData ? initialData.courtNames.join(", ") : "A, B"
   );
   const [courtType, setCourtType] = useState<CourtType>(initialData?.courtType ?? "hard_court");
+  const [fairnessMode, setFairnessMode] = useState<FairnessMode>(initialData?.fairnessMode ?? "normal");
 
   // Step 2 state
   const [gamesPerSet, setGamesPerSetState] = useState(initialData?.gamesPerSet ?? 5);
   const [minutesPerMatch, setMinutesPerMatch] = useState(initialData?.minutesPerMatch ?? 25);
   const [breakMinutes, setBreakMinutes] = useState(initialData?.breakMinutes ?? 5);
   const [warmupMinutes, setWarmupMinutes] = useState(initialData?.warmupMinutes ?? 20);
+  const [wrapupMinutes, setWrapupMinutes] = useState(initialData?.wrapupMinutes ?? 0);
 
   function setGamesPerSet(n: number) {
     setGamesPerSetState(n);
@@ -147,7 +153,19 @@ export function RoomWizard({
     setCourtType(t.courtType);
   }
 
-  const slotsPerCourt = calcSlotsPerCourt({ startTime, endTime, minutesPerMatch, breakMinutes, warmupMinutes });
+  // "[대회 버전]"은 일정 템플릿과 달리 장소/시간을 바꾸지 않고, 대진표 생성 모드만 전환한다.
+  function toggleTournamentMode() {
+    setFairnessMode((prev) => (prev === "tournament" ? "normal" : "tournament"));
+  }
+
+  const slotsPerCourt = calcSlotsPerCourt({
+    startTime,
+    endTime,
+    minutesPerMatch,
+    breakMinutes,
+    warmupMinutes,
+    wrapupMinutes,
+  });
   const totalMatches = slotsPerCourt * courtNames.length;
 
   const maleMembers = members.filter((m) => m.gender === "male");
@@ -235,9 +253,11 @@ export function RoomWizard({
         minutesPerMatch,
         breakMinutes,
         warmupMinutes,
+        wrapupMinutes,
         courtNames,
         courtType,
         matchTypes: Array.from(effectiveMatchTypes),
+        fairnessMode,
         participantMemberIds: Array.from(selectedMemberIds),
         gradeOverrides,
       };
@@ -313,7 +333,24 @@ export function RoomWizard({
                   {TEMPLATE_LABEL[key]}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={toggleTournamentMode}
+                title="장소/시간은 그대로 두고, 대진표 생성 시 성별 그룹별 경기수를 최대한 균등하게 맞춥니다."
+                className={`rounded-md border px-3 py-1.5 text-sm ${
+                  fairnessMode === "tournament"
+                    ? "border-amber-600 bg-amber-50 text-amber-800"
+                    : "border-zinc-300 text-zinc-600"
+                }`}
+              >
+                [대회 버전]
+              </button>
             </div>
+            {fairnessMode === "tournament" && (
+              <p className="mt-2 text-xs text-amber-700">
+                대회 모드: 대진표 생성 시 남녀 각각 경기수를 최대한 동일하게 맞춥니다.
+              </p>
+            )}
           </div>
 
           <div>
@@ -504,6 +541,33 @@ export function RoomWizard({
               일정 시작 후 몸풀기 시간이 지나고 나서 1라운드 경기가 시작됩니다.
             </p>
           </div>
+
+          {fairnessMode === "tournament" && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">
+                대회 마무리 시간 (시상식 등)
+              </label>
+              <div className="flex gap-2">
+                {WRAPUP_MINUTES_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setWrapupMinutes(n)}
+                    className={`rounded-md border px-3 py-1.5 text-sm ${
+                      wrapupMinutes === n
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                        : "border-zinc-300 text-zinc-600"
+                    }`}
+                  >
+                    {n === 0 ? "사용 안 함" : `${n}분`}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-zinc-400">
+                종료 시간 전에 시상식 등을 위한 시간을 비워둡니다. 이 시간만큼 경기가 일찍 종료됩니다.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -619,6 +683,7 @@ export function RoomWizard({
             <dt className="text-zinc-500">경기 방식</dt>
             <dd className="text-zinc-900">
               {gamesPerSet}게임 선승 · {minutesPerMatch}분/경기 · 휴식 {breakMinutes}분 · 몸풀기 {warmupMinutes}분
+              {fairnessMode === "tournament" && wrapupMinutes > 0 && ` · 마무리 ${wrapupMinutes}분`}
             </dd>
             <dt className="text-zinc-500">참가자</dt>
             <dd className="text-zinc-900">
@@ -627,6 +692,10 @@ export function RoomWizard({
             <dt className="text-zinc-500">경기 종류</dt>
             <dd className="text-zinc-900">
               {Array.from(effectiveMatchTypes).map((t) => MATCH_TYPE_LABEL[t]).join(", ")}
+            </dd>
+            <dt className="text-zinc-500">생성 모드</dt>
+            <dd className="text-zinc-900">
+              {fairnessMode === "tournament" ? "대회 버전 (경기수 최대한 균등)" : "일반"}
             </dd>
           </dl>
           <div className="rounded-md bg-emerald-50 p-4">

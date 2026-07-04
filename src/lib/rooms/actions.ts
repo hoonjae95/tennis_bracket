@@ -10,6 +10,7 @@ type RoomTemplate = Database["public"]["Enums"]["room_template"];
 type Grade = Database["public"]["Enums"]["grade"];
 type CourtType = Database["public"]["Enums"]["court_type"];
 type MatchType = Database["public"]["Enums"]["match_type"];
+type FairnessMode = Database["public"]["Enums"]["fairness_mode"];
 
 export type CreateRoomInput = {
   title: string;
@@ -23,9 +24,11 @@ export type CreateRoomInput = {
   minutesPerMatch: number;
   breakMinutes: number;
   warmupMinutes: number;
+  wrapupMinutes: number;
   courtNames: string[];
   courtType: CourtType;
   matchTypes: MatchType[];
+  fairnessMode: FairnessMode;
   participantMemberIds: string[];
   gradeOverrides: Record<string, Grade | null>;
 };
@@ -73,7 +76,9 @@ export async function createRoom(input: CreateRoomInput): Promise<CreateRoomResu
       minutes_per_match: input.minutesPerMatch,
       break_minutes: input.breakMinutes,
       warmup_minutes: input.warmupMinutes,
+      wrapup_minutes: input.wrapupMinutes,
       match_types: input.matchTypes,
+      fairness_mode: input.fairnessMode,
       status: "ready",
     })
     .select("id")
@@ -191,7 +196,9 @@ export async function updateRoom(input: UpdateRoomInput): Promise<UpdateRoomResu
       minutes_per_match: input.minutesPerMatch,
       break_minutes: input.breakMinutes,
       warmup_minutes: input.warmupMinutes,
+      wrapup_minutes: input.wrapupMinutes,
       match_types: input.matchTypes,
+      fairness_mode: input.fairnessMode,
       ...(bracketReset ? { status: "ready" as const } : {}),
     })
     .eq("id", input.roomId);

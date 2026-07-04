@@ -12,6 +12,7 @@ import {
   minGenderCounts,
   isDoubles,
   type BracketPlayer,
+  type FairnessMode,
   type FreePracticeSlot,
   type GeneratedMatch,
   type MatchType,
@@ -52,7 +53,9 @@ export function BracketBuilder({
     minutesPerMatch: number;
     breakMinutes: number;
     warmupMinutes: number;
+    wrapupMinutes: number;
     matchTypes: MatchType[];
+    fairnessMode: FairnessMode;
   };
   existingMatches: ExistingMatch[];
 }) {
@@ -78,6 +81,7 @@ export function BracketBuilder({
     minutesPerMatch: room.minutesPerMatch,
     breakMinutes: room.breakMinutes,
     warmupMinutes: room.warmupMinutes,
+    wrapupMinutes: room.wrapupMinutes,
   });
 
   function roundTimeLabel(roundNo: number): string {
@@ -117,6 +121,7 @@ export function BracketBuilder({
       courtCount: courts.length,
       slotsPerCourt,
       enabledMatchTypes: Array.from(types),
+      fairnessMode: room.fairnessMode,
     });
     setGenerated(result.matches);
     setFreePracticeSlots(result.freePracticeSlots);
@@ -187,7 +192,14 @@ export function BracketBuilder({
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-lg border border-zinc-200 bg-white p-4">
-        <h2 className="font-semibold text-zinc-800">경기 종류 선택 (다중 선택 가능)</h2>
+        <div className="mb-1 flex items-center gap-2">
+          <h2 className="font-semibold text-zinc-800">경기 종류 선택 (다중 선택 가능)</h2>
+          {room.fairnessMode === "tournament" && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              대회 모드: 경기수 최대한 균등
+            </span>
+          )}
+        </div>
         <p className="mb-3 text-xs text-zinc-500">누르면 바로 랜덤 생성됩니다.</p>
         <div className="flex flex-wrap gap-2">
           {availableMatchTypes.map((type) => {

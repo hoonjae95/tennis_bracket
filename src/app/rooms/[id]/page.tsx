@@ -85,6 +85,7 @@ export default async function RoomDetailPage({
     minutesPerMatch: room.minutes_per_match,
     breakMinutes: room.break_minutes,
     warmupMinutes: room.warmup_minutes,
+    wrapupMinutes: room.wrapup_minutes,
   });
 
   return (

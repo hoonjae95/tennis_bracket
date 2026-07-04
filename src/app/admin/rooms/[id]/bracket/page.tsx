@@ -56,7 +56,9 @@ export default async function RoomBracketPage({
           minutesPerMatch: room.minutes_per_match,
           breakMinutes: room.break_minutes,
           warmupMinutes: room.warmup_minutes,
+          wrapupMinutes: room.wrapup_minutes,
           matchTypes: room.match_types,
+          fairnessMode: room.fairness_mode,
         }}
         existingMatches={existingMatches ?? []}
       />

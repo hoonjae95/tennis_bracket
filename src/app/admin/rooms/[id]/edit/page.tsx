@@ -59,7 +59,9 @@ export default async function EditRoomPage({
     minutesPerMatch: room.minutes_per_match,
     breakMinutes: room.break_minutes,
     warmupMinutes: room.warmup_minutes,
+    wrapupMinutes: room.wrapup_minutes,
     matchTypes: (room.match_types ?? []) as MatchType[],
+    fairnessMode: room.fairness_mode,
     participantMemberIds: (participants ?? []).map((p) => p.member_id),
     gradeOverrides,
   };

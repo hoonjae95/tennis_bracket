@@ -1,0 +1,26 @@
+-- L.P.T 정회원 시드 데이터 (등급은 미지정 상태로 시작, 관리자가 정회원 관리 페이지에서 설정)
+
+insert into members (name, gender, grade) values
+  ('남자회원01', 'male', null),
+  ('남자회원02', 'male', null),
+  ('남자회원03', 'male', null),
+  ('남자회원04', 'male', null),
+  ('남자회원05', 'male', null),
+  ('남자회원06', 'male', null),
+  ('남자회원07', 'male', null),
+  ('남자회원08', 'male', null),
+  ('남자회원09', 'male', null),
+  ('남자회원10', 'male', null),
+  ('남자회원11', 'male', null),
+  ('남자회원12', 'male', null),
+  ('남자회원13', 'male', null),
+  ('남자회원14', 'male', null),
+  ('남자회원15', 'male', null),
+  ('여자회원01', 'female', null),
+  ('여자회원02', 'female', null),
+  ('여자회원03', 'female', null),
+  ('여자회원04', 'female', null),
+  ('여자회원05', 'female', null),
+  ('여자회원06', 'female', null),
+  ('여자회원07', 'female', null),
+  ('여자회원08', 'female', null);

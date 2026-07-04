@@ -1,0 +1,263 @@
+import {
+  type BracketGenerationInput,
+  type BracketGenerationResult,
+  type BracketPlayer,
+  type GeneratedMatch,
+  type MatchType,
+  GRADE_SCORE,
+  isDoubles,
+  playersPerTeam,
+} from "@/lib/bracket/types";
+
+const MAX_BALANCE_DIFF = 2; // 팀 간 등급 점수 합 차이 허용 한도
+const MAX_CONSECUTIVE_PLAY = 2; // 연속 출전 최대 (3연속 금지)
+const MAX_CONSECUTIVE_REST = 2; // 연속 휴식 최대 (3연속 금지)
+
+type PlayerState = {
+  player: BracketPlayer;
+  gamesPlayed: number;
+  consecutivePlay: number; // 직전까지 연속으로 뛴 라운드 수
+  consecutiveRest: number; // 직전까지 연속으로 쉰 라운드 수
+};
+
+function eligiblePlayersFor(
+  type: MatchType,
+  states: PlayerState[]
+): PlayerState[] {
+  if (type === "mens_doubles" || type === "mens_singles") {
+    return states.filter((s) => s.player.gender === "male");
+  }
+  if (type === "womens_doubles" || type === "womens_singles") {
+    return states.filter((s) => s.player.gender === "female");
+  }
+  // mixed_doubles / mixed_any_doubles: anyone
+  return states;
+}
+
+function forcedMustPlay(states: PlayerState[]): Set<string> {
+  // 3연속 휴식 방지: 이미 2연속 쉰 사람은 이번 라운드에 반드시 뛰어야 함
+  return new Set(
+    states
+      .filter((s) => s.consecutiveRest >= MAX_CONSECUTIVE_REST)
+      .map((s) => s.player.roomParticipantId)
+  );
+}
+
+function forcedMustRest(states: PlayerState[]): Set<string> {
+  // 3연속 출전 방지: 이미 2연속 뛴 사람은 이번 라운드에 반드시 쉬어야 함
+  return new Set(
+    states
+      .filter((s) => s.consecutivePlay >= MAX_CONSECUTIVE_PLAY)
+      .map((s) => s.player.roomParticipantId)
+  );
+}
+
+function combinations<T>(arr: T[], k: number): T[][] {
+  if (k === 0) return [[]];
+  if (arr.length < k) return [];
+  const [head, ...rest] = arr;
+  const withHead = combinations(rest, k - 1).map((c) => [head, ...c]);
+  const withoutHead = combinations(rest, k);
+  return [...withHead, ...withoutHead];
+}
+
+function gradeSum(players: BracketPlayer[]): number {
+  return players.reduce((sum, p) => sum + GRADE_SCORE[p.grade], 0);
+}
+
+/**
+ * Pick the best team1/team2 split from a pool of candidates for a single match,
+ * prioritizing (1) fewer games played so far, (2) grade balance within MAX_BALANCE_DIFF,
+ * (3) mixed_doubles gender split (1 male + 1 female per team when possible).
+ */
+function buildMatch(
+  type: MatchType,
+  pool: PlayerState[],
+  mustPlayIds: Set<string>
+): { team1: PlayerState[]; team2: PlayerState[] } | null {
+  const perTeam = playersPerTeam(type);
+  const totalNeeded = perTeam * 2;
+  if (pool.length < totalNeeded) return null;
+
+  // Sort pool: must-play first, then fewer games played, then randomize ties
+  const sorted = [...pool].sort((a, b) => {
+    const aMust = mustPlayIds.has(a.player.roomParticipantId) ? 0 : 1;
+    const bMust = mustPlayIds.has(b.player.roomParticipantId) ? 0 : 1;
+    if (aMust !== bMust) return aMust - bMust;
+    if (a.gamesPlayed !== b.gamesPlayed) return a.gamesPlayed - b.gamesPlayed;
+    return Math.random() - 0.5;
+  });
+
+  // Candidate pool: take a generous slice biased toward players who need games,
+  // but consider enough people to find a balanced split.
+  const candidateSlice = sorted.slice(0, Math.min(sorted.length, Math.max(totalNeeded * 3, 8)));
+
+  let best: { team1: PlayerState[]; team2: PlayerState[]; diff: number; priorityScore: number } | null =
+    null;
+
+  const combosForMatch = combinations(candidateSlice, totalNeeded);
+  for (const group of combosForMatch) {
+    const mustPlayIncluded = candidateSlice
+      .filter((s) => mustPlayIds.has(s.player.roomParticipantId))
+      .every((s) => group.includes(s) || !candidateSlice.includes(s));
+
+    const teamSplits = splitIntoTeams(group, perTeam, type);
+    for (const { team1, team2 } of teamSplits) {
+      const diff = Math.abs(
+        gradeSum(team1.map((s) => s.player)) - gradeSum(team2.map((s) => s.player))
+      );
+      if (diff > MAX_BALANCE_DIFF) continue;
+
+      const priorityScore =
+        group.reduce((sum, s) => sum + s.gamesPlayed, 0) * 10 +
+        (mustPlayIncluded ? 0 : 100) +
+        diff;
+
+      if (!best || priorityScore < best.priorityScore) {
+        best = { team1, team2, diff, priorityScore };
+      }
+    }
+  }
+
+  if (best) return { team1: best.team1, team2: best.team2 };
+
+  // Relax must-play/balance constraints if nothing satisfied them (small pools)
+  const fallbackGroup = sorted.slice(0, totalNeeded);
+  const fallbackSplits = splitIntoTeams(fallbackGroup, perTeam, type);
+  if (fallbackSplits.length === 0) return null;
+  fallbackSplits.sort((a, b) => {
+    const diffA = Math.abs(gradeSum(a.team1.map((s) => s.player)) - gradeSum(a.team2.map((s) => s.player)));
+    const diffB = Math.abs(gradeSum(b.team1.map((s) => s.player)) - gradeSum(b.team2.map((s) => s.player)));
+    return diffA - diffB;
+  });
+  return fallbackSplits[0];
+}
+
+function splitIntoTeams(
+  group: PlayerState[],
+  perTeam: number,
+  type: MatchType
+): Array<{ team1: PlayerState[]; team2: PlayerState[] }> {
+  if (group.length !== perTeam * 2) return [];
+
+  if (perTeam === 1) {
+    return [{ team1: [group[0]], team2: [group[1]] }];
+  }
+
+  // doubles: try all ways to split 4 into 2+2
+  const results: Array<{ team1: PlayerState[]; team2: PlayerState[] }> = [];
+  const team1Combos = combinations(group, perTeam);
+  for (const team1 of team1Combos) {
+    const team2 = group.filter((s) => !team1.includes(s));
+    if (team2.length !== perTeam) continue;
+
+    if (type === "mixed_doubles") {
+      // require 1 male + 1 female per team
+      const t1Genders = team1.map((s) => s.player.gender).sort();
+      const t2Genders = team2.map((s) => s.player.gender).sort();
+      const valid =
+        t1Genders.join(",") === "female,male" && t2Genders.join(",") === "female,male";
+      if (!valid) continue;
+    }
+
+    results.push({ team1, team2 });
+  }
+  return results;
+}
+
+export function generateBracket(input: BracketGenerationInput): BracketGenerationResult {
+  const { players, courtCount, slotsPerCourt, enabledMatchTypes } = input;
+  const warnings: string[] = [];
+
+  if (enabledMatchTypes.length === 0) {
+    return { matches: [], playerStats: new Map(), warnings: ["경기 종류를 1개 이상 선택해주세요."] };
+  }
+
+  const states: PlayerState[] = players.map((p) => ({
+    player: p,
+    gamesPlayed: 0,
+    consecutivePlay: 0,
+    consecutiveRest: 0,
+  }));
+
+  const stateById = new Map(states.map((s) => [s.player.roomParticipantId, s]));
+  const matches: GeneratedMatch[] = [];
+
+  for (let round = 1; round <= slotsPerCourt; round++) {
+    const playingThisRound = new Set<string>();
+
+    for (let court = 0; court < courtCount; court++) {
+      const mustPlay = forcedMustPlay(states);
+      const mustRest = forcedMustRest(states);
+
+      // pool = not already playing this round, not forced to rest
+      const availablePool = states.filter(
+        (s) => !playingThisRound.has(s.player.roomParticipantId) && !mustRest.has(s.player.roomParticipantId)
+      );
+
+      // pick a match type: prefer one whose eligible pool (accounting for must-play backlog) is largest relative to need
+      let picked: { type: MatchType; team1: PlayerState[]; team2: PlayerState[] } | null = null;
+
+      const shuffledTypes = [...enabledMatchTypes].sort(() => Math.random() - 0.5);
+      for (const type of shuffledTypes) {
+        const eligible = eligiblePlayersFor(type, availablePool);
+        const built = buildMatch(type, eligible, mustPlay);
+        if (built) {
+          picked = { type, ...built };
+          break;
+        }
+      }
+
+      if (!picked) {
+        warnings.push(`${round}라운드 코트${court + 1}: 조건에 맞는 대진을 만들지 못했습니다.`);
+        continue;
+      }
+
+      matches.push({
+        courtIndex: court,
+        roundNo: round,
+        matchType: picked.type,
+        team1: picked.team1.map((s) => s.player),
+        team2: picked.team2.map((s) => s.player),
+      });
+
+      for (const s of [...picked.team1, ...picked.team2]) {
+        playingThisRound.add(s.player.roomParticipantId);
+      }
+    }
+
+    // update consecutive counters + games played after this round is fully assigned
+    for (const s of states) {
+      if (playingThisRound.has(s.player.roomParticipantId)) {
+        s.gamesPlayed += 1;
+        s.consecutivePlay += 1;
+        s.consecutiveRest = 0;
+      } else {
+        s.consecutivePlay = 0;
+        s.consecutiveRest += 1;
+      }
+    }
+  }
+
+  const playerStats = new Map(
+    states.map((s) => [s.player.roomParticipantId, { gamesPlayed: s.gamesPlayed }])
+  );
+
+  // 성별 그룹별로 편차를 따로 체크 (남복/여복만 켠 경우 등 그룹 인원 차이로 인한
+  // 자연스러운 총량 차이를 편차로 오인하지 않도록)
+  for (const gender of ["male", "female"] as const) {
+    const group = states.filter((s) => s.player.gender === gender);
+    if (group.length === 0) continue;
+    const counts = group.map((s) => s.gamesPlayed);
+    const max = Math.max(...counts);
+    const min = Math.min(...counts);
+    if (max - min > 1) {
+      warnings.push(
+        `${gender === "male" ? "남자" : "여자"} 선수 간 경기 수 편차가 ${max - min}게임입니다.`
+      );
+    }
+  }
+
+  void stateById;
+  return { matches, playerStats, warnings };
+}

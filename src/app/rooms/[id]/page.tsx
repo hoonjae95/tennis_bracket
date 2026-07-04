@@ -1,0 +1,125 @@
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { MATCH_TYPE_LABEL } from "@/lib/bracket/types";
+
+const TEMPLATE_LABEL: Record<string, string> = {
+  tuesday: "화요일 정기모임",
+  thursday: "목요일 정기모임",
+  saturday: "토요일 정기모임",
+  custom: "커스텀 일정",
+};
+
+export default async function RoomDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: room } = await supabase.from("rooms").select("*").eq("id", id).single();
+  if (!room) notFound();
+
+  const { data: courts } = await supabase
+    .from("courts")
+    .select("id, name, sort_order")
+    .eq("room_id", id)
+    .order("sort_order", { ascending: true });
+
+  const { data: matches } = await supabase
+    .from("matches")
+    .select(
+      "id, court_id, match_type, round_no, match_players(team, room_participant:room_participants(id, grade_override, member:members(name, grade)))"
+    )
+    .eq("room_id", id)
+    .order("round_no", { ascending: true });
+
+  const { data: participants } = await supabase
+    .from("room_participants")
+    .select("id, grade_override, member:members(name, gender, grade)")
+    .eq("room_id", id);
+
+  const matchesByCourt = new Map<string, typeof matches>();
+  for (const m of matches ?? []) {
+    const arr = matchesByCourt.get(m.court_id) ?? [];
+    arr.push(m);
+    matchesByCourt.set(m.court_id, arr);
+  }
+
+  const gameCountByParticipant = new Map<string, number>();
+  for (const m of matches ?? []) {
+    for (const mp of m.match_players) {
+      const pid = mp.room_participant?.id;
+      if (!pid) continue;
+      gameCountByParticipant.set(pid, (gameCountByParticipant.get(pid) ?? 0) + 1);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-zinc-900">{room.title}</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          {TEMPLATE_LABEL[room.template] ?? room.template} · {room.event_date} · {room.start_time}~
+          {room.end_time}
+        </p>
+        <p className="text-sm text-zinc-500">
+          {room.location} ({room.is_indoor ? "실내" : "실외"}) · {room.games_per_set}게임 선승 ·{" "}
+          {room.minutes_per_match}분/경기 · 휴식 {room.break_minutes}분
+        </p>
+        <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+          {room.status === "published" ? "대진표 확정" : room.status === "ready" ? "구성 완료" : "준비 중"}
+        </span>
+      </div>
+
+      {(!matches || matches.length === 0) ? (
+        <div className="rounded-lg border border-dashed border-zinc-300 py-16 text-center text-zinc-500">
+          아직 대진표가 생성되지 않았습니다.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {(courts ?? []).map((court) => (
+            <div key={court.id} className="rounded-lg border border-zinc-200 bg-white p-4">
+              <h2 className="mb-2 font-semibold text-zinc-800">코트 {court.name}</h2>
+              <ul className="flex flex-col divide-y divide-zinc-100">
+                {(matchesByCourt.get(court.id) ?? []).map((m) => {
+                  const team1 = m.match_players.filter((mp) => mp.team === 1);
+                  const team2 = m.match_players.filter((mp) => mp.team === 2);
+                  return (
+                    <li key={m.id} className="flex items-center justify-between py-2 text-sm">
+                      <span className="w-14 shrink-0 text-zinc-400">R{m.round_no}</span>
+                      <span className="w-20 shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-center text-xs text-zinc-600">
+                        {MATCH_TYPE_LABEL[m.match_type as keyof typeof MATCH_TYPE_LABEL] ?? m.match_type}
+                      </span>
+                      <span className="flex-1 text-right text-zinc-800">
+                        {team1.map((mp) => mp.room_participant?.member?.name).join(" · ")}
+                      </span>
+                      <span className="mx-3 text-zinc-400">vs</span>
+                      <span className="flex-1 text-zinc-800">
+                        {team2.map((mp) => mp.room_participant?.member?.name).join(" · ")}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {participants && participants.length > 0 && (
+        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-4">
+          <h2 className="mb-2 font-semibold text-zinc-800">선수별 참가 경기 수</h2>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
+            {participants.map((p) => (
+              <div key={p.id} className="flex justify-between text-zinc-700">
+                <span>{p.member?.name}</span>
+                <span className="text-zinc-500">{gameCountByParticipant.get(p.id) ?? 0}경기</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -2,13 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminAuthenticated } from "@/lib/auth/session";
 import { DeleteRoomButton } from "@/components/rooms/delete-room-button";
-
-const TEMPLATE_LABEL: Record<string, string> = {
-  tuesday: "화요일 정기모임",
-  thursday: "목요일 정기모임",
-  saturday: "토요일 정기모임",
-  custom: "커스텀 일정",
-};
+import { TEMPLATE_LABEL } from "@/lib/rooms/templates";
 
 export default async function HomePage() {
   const supabase = await createClient();

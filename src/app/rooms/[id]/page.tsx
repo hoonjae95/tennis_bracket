@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminAuthenticated } from "@/lib/auth/session";
 import { calcRoundTimeRange, calcSlotsPerCourt } from "@/lib/rooms/game-calc";
+import { TEMPLATE_LABEL } from "@/lib/rooms/templates";
 import {
   MATCH_TYPE_LABEL,
   MATCH_TYPE_BADGE,
@@ -11,13 +12,6 @@ import {
   type Gender,
   type MatchType,
 } from "@/lib/bracket/types";
-
-const TEMPLATE_LABEL: Record<string, string> = {
-  tuesday: "화요일 정기모임",
-  thursday: "목요일 정기모임",
-  saturday: "토요일 정기모임",
-  custom: "커스텀 일정",
-};
 
 export default async function RoomDetailPage({
   params,

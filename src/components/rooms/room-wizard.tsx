@@ -104,6 +104,7 @@ export function RoomWizard({ members }: { members: Member[] }) {
     setStartTime(t.startTime);
     setEndTime(t.endTime);
     setCourtNamesText(t.courtOptions[0].join(", "));
+    setCourtType(t.courtType);
   }
 
   const slotsPerCourt = calcSlotsPerCourt({ startTime, endTime, minutesPerMatch, breakMinutes, warmupMinutes });

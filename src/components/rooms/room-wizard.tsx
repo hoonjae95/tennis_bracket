@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ROOM_TEMPLATES, TEMPLATE_LABEL, type RoomTemplateKey } from "@/lib/rooms/templates";
 import { calcSlotsPerCourt } from "@/lib/rooms/game-calc";
-import { createRoom } from "@/lib/rooms/actions";
+import { createRoom, updateRoom } from "@/lib/rooms/actions";
 import {
   COURT_TYPE_LABEL,
   MATCH_MINUTES_OPTIONS,
@@ -13,6 +13,7 @@ import {
   RECOMMENDED_MINUTES_BY_GAMES,
   MATCH_TYPE_LABEL,
   minGenderCounts,
+  isDoubles,
   type CourtType,
   type MatchType,
 } from "@/lib/bracket/types";
@@ -31,28 +32,57 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function RoomWizard({ members }: { members: Member[] }) {
+export type RoomWizardInitialData = {
+  roomId: string;
+  template: RoomTemplateKey;
+  title: string;
+  eventDate: string;
+  location: string;
+  isIndoor: boolean;
+  startTime: string;
+  endTime: string;
+  courtNames: string[];
+  courtType: CourtType;
+  gamesPerSet: number;
+  minutesPerMatch: number;
+  breakMinutes: number;
+  warmupMinutes: number;
+  matchTypes: MatchType[];
+  participantMemberIds: string[];
+  gradeOverrides: Record<string, Grade | null>;
+};
+
+export function RoomWizard({
+  members,
+  initialData,
+}: {
+  members: Member[];
+  initialData?: RoomWizardInitialData;
+}) {
   const router = useRouter();
+  const isEditMode = Boolean(initialData);
   const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   // Step 1 state
-  const [template, setTemplate] = useState<RoomTemplateKey>("custom");
-  const [title, setTitle] = useState("");
-  const [eventDate, setEventDate] = useState(todayStr());
-  const [location, setLocation] = useState("");
-  const [isIndoor, setIsIndoor] = useState(false);
-  const [startTime, setStartTime] = useState("19:00");
-  const [endTime, setEndTime] = useState("22:00");
-  const [courtNamesText, setCourtNamesText] = useState("A, B");
-  const [courtType, setCourtType] = useState<CourtType>("hard_court");
+  const [template, setTemplate] = useState<RoomTemplateKey>(initialData?.template ?? "custom");
+  const [title, setTitle] = useState(initialData?.title ?? "");
+  const [eventDate, setEventDate] = useState(initialData?.eventDate ?? todayStr());
+  const [location, setLocation] = useState(initialData?.location ?? "");
+  const [isIndoor, setIsIndoor] = useState(initialData?.isIndoor ?? false);
+  const [startTime, setStartTime] = useState(initialData?.startTime ?? "19:00");
+  const [endTime, setEndTime] = useState(initialData?.endTime ?? "22:00");
+  const [courtNamesText, setCourtNamesText] = useState(
+    initialData ? initialData.courtNames.join(", ") : "A, B"
+  );
+  const [courtType, setCourtType] = useState<CourtType>(initialData?.courtType ?? "hard_court");
 
   // Step 2 state
-  const [gamesPerSet, setGamesPerSetState] = useState(5);
-  const [minutesPerMatch, setMinutesPerMatch] = useState(25);
-  const [breakMinutes, setBreakMinutes] = useState(5);
-  const [warmupMinutes, setWarmupMinutes] = useState(20);
+  const [gamesPerSet, setGamesPerSetState] = useState(initialData?.gamesPerSet ?? 5);
+  const [minutesPerMatch, setMinutesPerMatch] = useState(initialData?.minutesPerMatch ?? 25);
+  const [breakMinutes, setBreakMinutes] = useState(initialData?.breakMinutes ?? 5);
+  const [warmupMinutes, setWarmupMinutes] = useState(initialData?.warmupMinutes ?? 20);
 
   function setGamesPerSet(n: number) {
     setGamesPerSetState(n);
@@ -60,9 +90,15 @@ export function RoomWizard({ members }: { members: Member[] }) {
   }
 
   // Step 3 state (경기 종류)
-  const [isDoublesRoom, setIsDoublesRoom] = useState(true);
+  const [isDoublesRoom, setIsDoublesRoom] = useState(
+    initialData ? initialData.matchTypes.length === 0 || initialData.matchTypes.some(isDoubles) : true
+  );
   const [selectedMatchTypes, setSelectedMatchTypes] = useState<Set<MatchType>>(
-    new Set<MatchType>(["mens_doubles", "womens_doubles"])
+    new Set<MatchType>(
+      initialData && initialData.matchTypes.length > 0
+        ? initialData.matchTypes
+        : ["mens_doubles", "womens_doubles"]
+    )
   );
 
   function toggleMatchType(type: MatchType) {
@@ -82,8 +118,12 @@ export function RoomWizard({ members }: { members: Member[] }) {
   }
 
   // Step 5 state
-  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
-  const [gradeOverrides, setGradeOverrides] = useState<Record<string, Grade | null>>({});
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
+    new Set(initialData?.participantMemberIds ?? [])
+  );
+  const [gradeOverrides, setGradeOverrides] = useState<Record<string, Grade | null>>(
+    initialData?.gradeOverrides ?? {}
+  );
 
   const courtNames = useMemo(
     () =>
@@ -183,7 +223,7 @@ export function RoomWizard({ members }: { members: Member[] }) {
     }
     setError(null);
     startTransition(async () => {
-      const result = await createRoom({
+      const payload = {
         title,
         template,
         eventDate,
@@ -200,7 +240,19 @@ export function RoomWizard({ members }: { members: Member[] }) {
         matchTypes: Array.from(effectiveMatchTypes),
         participantMemberIds: Array.from(selectedMemberIds),
         gradeOverrides,
-      });
+      };
+
+      if (isEditMode && initialData) {
+        const result = await updateRoom({ ...payload, roomId: initialData.roomId });
+        if (result.success) {
+          router.push(`/admin/rooms/${initialData.roomId}/bracket`);
+        } else {
+          setError(result.error);
+        }
+        return;
+      }
+
+      const result = await createRoom(payload);
       if (result.success) {
         router.push(`/admin/rooms/${result.roomId}/bracket`);
       } else {
@@ -208,6 +260,16 @@ export function RoomWizard({ members }: { members: Member[] }) {
       }
     });
   }
+
+  // 편집 모드에서 코트 구성/참가자 명단이 원래 값과 달라지면 저장 시 기존 대진표가 초기화된다.
+  const bracketWillReset =
+    isEditMode &&
+    initialData !== undefined &&
+    (courtNames.length !== initialData.courtNames.length ||
+      courtNames.some((name, i) => name !== initialData.courtNames[i]) ||
+      courtType !== initialData.courtType ||
+      selectedMemberIds.size !== initialData.participantMemberIds.length ||
+      initialData.participantMemberIds.some((id) => !selectedMemberIds.has(id)));
 
   return (
     <div className="flex flex-col gap-6">
@@ -573,6 +635,14 @@ export function RoomWizard({ members }: { members: Member[] }) {
               <strong>{totalMatches}경기</strong>를 대진표에 배치합니다.
             </p>
           </div>
+          {bracketWillReset && (
+            <div className="rounded-md bg-amber-50 p-4">
+              <p className="text-sm text-amber-800">
+                코트 구성 또는 참가자 명단이 변경되어, 저장하면 기존에 만들어둔 대진표가 초기화됩니다.
+                저장 후 대진표 페이지에서 다시 생성해주세요.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -600,7 +670,13 @@ export function RoomWizard({ members }: { members: Member[] }) {
             disabled={isPending}
             className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
           >
-            {isPending ? "생성 중..." : "대진표 짜러가기"}
+            {isPending
+              ? isEditMode
+                ? "저장 중..."
+                : "생성 중..."
+              : isEditMode
+              ? "수정 저장"
+              : "대진표 짜러가기"}
           </button>
         )}
       </div>

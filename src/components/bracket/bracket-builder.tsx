@@ -241,16 +241,39 @@ export function BracketBuilder({
 
       {generated && (
         <>
-          <div className="rounded-lg border border-zinc-200 bg-white p-4">
-            <h2 className="mb-3 font-semibold text-zinc-800">선수별 참가 경기 수</h2>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
-              {players.map((p) => (
-                <div key={p.roomParticipantId} className="flex justify-between text-zinc-700">
-                  <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
-                  <span className="text-zinc-500">{statsByPlayer.get(p.roomParticipantId) ?? 0}경기</span>
-                </div>
-              ))}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-zinc-200 bg-white p-4">
+              <h2 className="mb-3 font-semibold text-zinc-800">선수별 참가 경기 수</h2>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                {players.map((p) => (
+                  <div key={p.roomParticipantId} className="flex justify-between text-zinc-700">
+                    <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
+                    <span className="text-zinc-500">{statsByPlayer.get(p.roomParticipantId) ?? 0}경기</span>
+                  </div>
+                ))}
+              </div>
             </div>
+
+            {sortedRestingPlayersByRound.length > 0 && (
+              <div className="rounded-lg border border-zinc-200 bg-white p-4">
+                <h2 className="mb-3 font-semibold text-zinc-800">라운드별 휴식 선수</h2>
+                <ul className="flex flex-col divide-y divide-zinc-100 text-sm">
+                  {sortedRestingPlayersByRound.map(({ roundNo, players: restingPlayers }) => (
+                    <li key={roundNo} className="flex items-start gap-3 py-2">
+                      <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
+                      <span className="flex-1 text-zinc-700">
+                        {restingPlayers.map((p, i) => (
+                          <span key={p.roomParticipantId}>
+                            {i > 0 && " · "}
+                            <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-4">
@@ -279,27 +302,6 @@ export function BracketBuilder({
               );
             })}
           </div>
-
-          {sortedRestingPlayersByRound.length > 0 && (
-            <div className="rounded-lg border border-zinc-200 bg-white p-4">
-              <h2 className="mb-3 font-semibold text-zinc-800">라운드별 휴식 선수</h2>
-              <ul className="flex flex-col divide-y divide-zinc-100 text-sm">
-                {sortedRestingPlayersByRound.map(({ roundNo, players: restingPlayers }) => (
-                  <li key={roundNo} className="flex items-start gap-3 py-2">
-                    <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
-                    <span className="flex-1 text-zinc-700">
-                      {restingPlayers.map((p, i) => (
-                        <span key={p.roomParticipantId}>
-                          {i > 0 && " · "}
-                          <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
-                        </span>
-                      ))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           <div className="flex items-center gap-3">
             <button
@@ -354,7 +356,18 @@ function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: stri
           ))}
         </span>
       </div>
-      {match.note && <p className="mt-1 text-right text-xs text-amber-600">비고: {match.note}</p>}
+      {match.note && match.note.length > 0 && (
+        <p className="mt-1 text-right text-xs text-amber-600">
+          비고:{" "}
+          {match.note.map((group, i) => (
+            <span key={group.consecutiveCount}>
+              {i > 0 && " / "}
+              {group.names.join(", ")}님이 <strong className="font-bold">{group.consecutiveCount}</strong>경기 연속
+              진행중입니다!
+            </span>
+          ))}
+        </p>
+      )}
     </li>
   );
 }

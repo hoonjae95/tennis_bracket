@@ -42,8 +42,8 @@ export default async function HomePage() {
                 href={`/rooms/${room.id}`}
                 className="block rounded-lg border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow"
               >
-                <div className="flex items-center justify-between gap-2 pr-12">
-                  <h2 className="font-semibold text-zinc-900">{room.title}</h2>
+                <div className="flex items-center justify-between gap-2 pr-24 sm:pr-28">
+                  <h2 className="min-w-0 truncate font-semibold text-zinc-900">{room.title}</h2>
                   <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                     {TEMPLATE_LABEL[room.template] ?? room.template}
                   </span>
@@ -56,7 +56,13 @@ export default async function HomePage() {
                 </div>
               </Link>
               {isAdmin && (
-                <div className="absolute right-4 top-4">
+                <div className="absolute right-4 top-4 flex items-center gap-2">
+                  <Link
+                    href={`/admin/rooms/${room.id}/edit`}
+                    className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-600 hover:border-emerald-300 hover:text-emerald-700"
+                  >
+                    수정
+                  </Link>
                   <DeleteRoomButton roomId={room.id} roomTitle={room.title} />
                 </div>
               )}

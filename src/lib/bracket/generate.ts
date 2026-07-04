@@ -2,6 +2,7 @@ import {
   type BracketGenerationInput,
   type BracketGenerationResult,
   type BracketPlayer,
+  type ConsecutivePlayNote,
   type FreePracticeSlot,
   type GeneratedMatch,
   type MatchType,
@@ -291,9 +292,16 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
       }
 
       // consecutivePlay는 "이전까지" 연속 출전 라운드 수이므로, 이번 라운드까지 포함하면 +1
-      const forcedNote = forced
-        .map((s) => `${s.player.name}님이 ${s.consecutivePlay + 1}경기 연속 진행중입니다!`)
-        .join(" ");
+      const countByName = new Map<number, string[]>();
+      for (const s of forced) {
+        const count = s.consecutivePlay + 1;
+        const names = countByName.get(count) ?? [];
+        names.push(s.player.name);
+        countByName.set(count, names);
+      }
+      const forcedNote: ConsecutivePlayNote[] = Array.from(countByName.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([consecutiveCount, names]) => ({ names, consecutiveCount }));
 
       matches.push({
         courtIndex: court,
@@ -301,7 +309,7 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
         matchType: picked.type,
         team1: picked.team1.map((s) => s.player),
         team2: picked.team2.map((s) => s.player),
-        note: forcedNote || undefined,
+        note: forcedNote.length > 0 ? forcedNote : undefined,
       });
 
       for (const s of [...picked.team1, ...picked.team2]) {

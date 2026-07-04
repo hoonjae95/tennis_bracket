@@ -110,6 +110,45 @@ export default async function RoomDetailPage({
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          {(restingByRound.length > 0 || (participants && participants.length > 0)) && (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {participants && participants.length > 0 && (
+                <div className="rounded-lg border border-zinc-200 bg-white p-4">
+                  <h2 className="mb-2 font-semibold text-zinc-800">선수별 참가 경기 수</h2>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    {participants.map((p) => (
+                      <div key={p.id} className="flex justify-between text-zinc-700">
+                        <span className={GENDER_TEXT_COLOR[p.member?.gender as Gender]}>{p.member?.name}</span>
+                        <span className="text-zinc-500">{gameCountByParticipant.get(p.id) ?? 0}경기</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {restingByRound.length > 0 && (
+                <div className="rounded-lg border border-zinc-200 bg-white p-4">
+                  <h2 className="mb-2 font-semibold text-zinc-800">라운드별 휴식 선수</h2>
+                  <ul className="flex flex-col divide-y divide-zinc-100 text-sm">
+                    {restingByRound.map(({ roundNo, resting }) => (
+                      <li key={roundNo} className="flex items-start gap-3 py-2">
+                        <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
+                        <span className="flex-1 text-zinc-700">
+                          {resting.map((p, i) => (
+                            <span key={p.id}>
+                              {i > 0 && " · "}
+                              <span className={GENDER_TEXT_COLOR[p.member?.gender as Gender]}>{p.member?.name}</span>
+                            </span>
+                          ))}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           {(courts ?? []).map((court) => {
             const courtMatches = matchesByCourt.get(court.id) ?? [];
             const matchedRounds = new Set(courtMatches.map((m) => m.round_no));
@@ -201,41 +240,6 @@ export default async function RoomDetailPage({
               </div>
             );
           })}
-        </div>
-      )}
-
-      {restingByRound.length > 0 && (
-        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold text-zinc-800">라운드별 휴식 선수</h2>
-          <ul className="flex flex-col divide-y divide-zinc-100 text-sm">
-            {restingByRound.map(({ roundNo, resting }) => (
-              <li key={roundNo} className="flex items-start gap-3 py-2">
-                <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
-                <span className="flex-1 text-zinc-700">
-                  {resting.map((p, i) => (
-                    <span key={p.id}>
-                      {i > 0 && " · "}
-                      <span className={GENDER_TEXT_COLOR[p.member?.gender as Gender]}>{p.member?.name}</span>
-                    </span>
-                  ))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {participants && participants.length > 0 && (
-        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold text-zinc-800">선수별 참가 경기 수</h2>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
-            {participants.map((p) => (
-              <div key={p.id} className="flex justify-between text-zinc-700">
-                <span className={GENDER_TEXT_COLOR[p.member?.gender as Gender]}>{p.member?.name}</span>
-                <span className="text-zinc-500">{gameCountByParticipant.get(p.id) ?? 0}경기</span>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

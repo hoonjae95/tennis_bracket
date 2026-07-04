@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRoomParticipants } from "@/lib/bracket/actions";
@@ -30,11 +31,19 @@ export default async function RoomBracketPage({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-zinc-900">{room.title} — 대진표</h1>
-        <p className="text-sm text-zinc-500">
-          {room.event_date} · {room.location} · {room.games_per_set}게임 선승 · {room.minutes_per_match}분/경기
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-zinc-900">{room.title} — 대진표</h1>
+          <p className="text-sm text-zinc-500">
+            {room.event_date} · {room.location} · {room.games_per_set}게임 선승 · {room.minutes_per_match}분/경기
+          </p>
+        </div>
+        <Link
+          href={`/admin/rooms/${id}/edit`}
+          className="shrink-0 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:border-emerald-300 hover:text-emerald-700"
+        >
+          방 정보 수정
+        </Link>
       </div>
 
       <BracketBuilder

@@ -17,13 +17,19 @@ export type BracketPlayer = {
   grade: Grade; // effective grade (override applied), defaults to 'C' if unset
 };
 
+// 비고: 같은 연속 출전 횟수를 겪는 선수들을 묶어서 표시하기 위한 그룹
+export type ConsecutivePlayNote = {
+  names: string[];
+  consecutiveCount: number; // 이번 라운드까지 포함한 연속 출전 라운드 수
+};
+
 export type GeneratedMatch = {
   courtIndex: number; // 0-based index into courts[]
   roundNo: number; // 1-based order within the court
   matchType: MatchType;
   team1: BracketPlayer[];
   team2: BracketPlayer[];
-  note?: string; // 비고: 연속 출전 등 조건 미충족으로 강행 배정된 경우의 안내 문구
+  note?: ConsecutivePlayNote[]; // 비고: 연속 출전 등 조건 미충족으로 강행 배정된 경우의 안내 정보
 };
 
 export type BracketGenerationInput = {

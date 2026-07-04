@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { generateBracket } from "@/lib/bracket/generate";
-import { calcSlotsPerCourt, calcRoundTimeRange } from "@/lib/rooms/game-calc";
+import { calcSlotsPerCourt, calcRoundTimeRange, calcWarmupTimeRange, calcWrapupTimeRange } from "@/lib/rooms/game-calc";
 import { saveBracket } from "@/lib/bracket/actions";
 import {
   MATCH_TYPE_LABEL,
@@ -270,19 +270,37 @@ export function BracketBuilder({
               <div className="rounded-lg border border-zinc-200 bg-white p-4">
                 <h2 className="mb-3 font-semibold text-zinc-800">라운드별 휴식 선수</h2>
                 <ul className="flex flex-col divide-y divide-zinc-100 text-sm">
-                  {sortedRestingPlayersByRound.map(({ roundNo, players: restingPlayers }) => (
-                    <li key={roundNo} className="flex items-start gap-3 py-2">
-                      <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
-                      <span className="flex-1 text-zinc-700">
-                        {restingPlayers.map((p, i) => (
-                          <span key={p.roomParticipantId}>
-                            {i > 0 && " · "}
-                            <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
-                          </span>
-                        ))}
-                      </span>
-                    </li>
-                  ))}
+                  {sortedRestingPlayersByRound.map(({ roundNo, players: restingPlayers }) => {
+                    const maleResting = restingPlayers.filter((p) => p.gender === "male");
+                    const femaleResting = restingPlayers.filter((p) => p.gender === "female");
+                    return (
+                      <li key={roundNo} className="flex items-start gap-3 py-2">
+                        <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          {maleResting.length > 0 && (
+                            <span className={`truncate whitespace-nowrap ${GENDER_TEXT_COLOR.male}`}>
+                              {maleResting.map((p, i) => (
+                                <span key={p.roomParticipantId}>
+                                  {i > 0 && " · "}
+                                  {p.name}
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                          {femaleResting.length > 0 && (
+                            <span className={`truncate whitespace-nowrap ${GENDER_TEXT_COLOR.female}`}>
+                              {femaleResting.map((p, i) => (
+                                <span key={p.roomParticipantId}>
+                                  {i > 0 && " · "}
+                                  {p.name}
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -298,16 +316,42 @@ export function BracketBuilder({
                 ...(freeSlotsByCourt.get(idx) ?? []).map((s) => ({ kind: "free" as const, roundNo: s.roundNo })),
               ].sort((a, b) => a.roundNo - b.roundNo);
 
+              const warmup =
+                room.warmupMinutes > 0
+                  ? calcWarmupTimeRange({ startTime: room.startTime, warmupMinutes: room.warmupMinutes })
+                  : null;
+
+              const wrapup =
+                room.fairnessMode === "tournament" && room.wrapupMinutes > 0 && slotsPerCourt > 0
+                  ? calcWrapupTimeRange({
+                      startTime: room.startTime,
+                      minutesPerMatch: room.minutesPerMatch,
+                      breakMinutes: room.breakMinutes,
+                      warmupMinutes: room.warmupMinutes,
+                      wrapupMinutes: room.wrapupMinutes,
+                      lastRoundNo: slotsPerCourt,
+                    })
+                  : null;
+
               return (
                 <div key={court.id} className="rounded-lg border border-zinc-200 bg-white p-4">
                   <h3 className="mb-2 font-semibold text-zinc-800">코트 {court.name}</h3>
                   <ul className="flex flex-col divide-y divide-zinc-100">
+                    {warmup && <TimeBadgeRow label="몸풀기" start={warmup.start} end={warmup.end} />}
                     {rows.map((row, i) =>
                       row.kind === "match" ? (
                         <MatchRow key={i} match={row.match} timeLabel={roundTimeLabel(row.roundNo)} />
                       ) : (
                         <FreePracticeRow key={i} roundNo={row.roundNo} timeLabel={roundTimeLabel(row.roundNo)} />
                       )
+                    )}
+                    {wrapup && (
+                      <TimeBadgeRow
+                        label="대회 마무리 (시상식 등)"
+                        start={wrapup.start}
+                        end={wrapup.end}
+                        emphasis
+                      />
                     )}
                   </ul>
                 </div>
@@ -338,35 +382,39 @@ function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: stri
 
   return (
     <li className="flex flex-col py-2 text-sm">
-      <div className="flex items-center justify-between">
-        <span className="w-16 shrink-0 text-zinc-400">R{match.roundNo}</span>
-        <span className="w-28 shrink-0 text-xs text-zinc-400">{timeLabel}</span>
-        <span
-          className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs ${MATCH_TYPE_BADGE[match.matchType]}`}
-        >
-          {MATCH_TYPE_LABEL[match.matchType]}
-        </span>
-        <span className="flex-1 text-right text-zinc-800">
-          {match.team1.map((p, i) => (
-            <span key={p.roomParticipantId}>
-              {i > 0 && " · "}
-              <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
-              {`(${p.grade})`}
-            </span>
-          ))}
-        </span>
-        <span className="mx-2 shrink-0 text-xs text-zinc-400">
-          페어 점수 {t1sum} : {t2sum}
-        </span>
-        <span className="flex-1 text-zinc-800">
-          {match.team2.map((p, i) => (
-            <span key={p.roomParticipantId}>
-              {i > 0 && " · "}
-              <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
-              {`(${p.grade})`}
-            </span>
-          ))}
-        </span>
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
+        <div className="flex shrink-0 items-center gap-2 sm:contents">
+          <span className="w-16 shrink-0 text-zinc-400">R{match.roundNo}</span>
+          <span className="w-28 shrink-0 text-xs text-zinc-400">{timeLabel}</span>
+          <span
+            className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs ${MATCH_TYPE_BADGE[match.matchType]}`}
+          >
+            {MATCH_TYPE_LABEL[match.matchType]}
+          </span>
+        </div>
+        <div className="flex min-w-0 items-center pl-16 sm:contents sm:pl-0">
+          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-right text-zinc-800">
+            {match.team1.map((p, i) => (
+              <span key={p.roomParticipantId}>
+                {i > 0 && " · "}
+                <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
+                {`(${p.grade})`}
+              </span>
+            ))}
+          </span>
+          <span className="mx-2 shrink-0 text-xs text-zinc-400">
+            페어 점수 {t1sum} : {t2sum}
+          </span>
+          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-zinc-800">
+            {match.team2.map((p, i) => (
+              <span key={p.roomParticipantId}>
+                {i > 0 && " · "}
+                <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
+                {`(${p.grade})`}
+              </span>
+            ))}
+          </span>
+        </div>
       </div>
       {match.note && match.note.length > 0 && (
         <p className="mt-1 text-right text-xs text-amber-600">
@@ -391,6 +439,34 @@ function FreePracticeRow({ roundNo, timeLabel }: { roundNo: number; timeLabel: s
       <span className="w-28 shrink-0 text-xs text-zinc-400">{timeLabel}</span>
       <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-center text-xs text-zinc-500">
         자유 랠리 연습
+      </span>
+    </li>
+  );
+}
+
+function TimeBadgeRow({
+  label,
+  start,
+  end,
+  emphasis,
+}: {
+  label: string;
+  start: string;
+  end: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <li className="flex items-center py-2 text-sm">
+      <span className="w-16 shrink-0 text-zinc-400"></span>
+      <span className="w-28 shrink-0 text-xs text-zinc-400">
+        {start}~{end}
+      </span>
+      <span
+        className={`rounded-full px-2 py-0.5 text-center text-xs ${
+          emphasis ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-zinc-500"
+        }`}
+      >
+        {label}
       </span>
     </li>
   );

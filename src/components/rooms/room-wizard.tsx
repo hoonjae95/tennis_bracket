@@ -26,6 +26,8 @@ type Grade = Database["public"]["Enums"]["grade"];
 
 const STEPS = ["일정 정보", "경기 규칙", "참가자 등록", "경기 종류", "확인"] as const;
 
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
+
 const COURT_TYPES: CourtType[] = ["artificial_grass", "hard_court", "clay_court"];
 const DOUBLES_TYPES: MatchType[] = ["mens_doubles", "womens_doubles", "mixed_doubles", "mixed_any_doubles"];
 const SINGLES_TYPES: MatchType[] = ["mens_singles", "womens_singles"];
@@ -293,11 +295,11 @@ export function RoomWizard({
 
   return (
     <div className="flex flex-col gap-6">
-      <ol className="flex items-center gap-2 text-xs">
+      <ol className="flex items-center gap-2 overflow-x-auto text-xs">
         {STEPS.map((label, i) => (
           <li
             key={label}
-            className={`flex items-center gap-1 rounded-full px-3 py-1 ${
+            className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 ${
               i === step
                 ? "bg-emerald-700 text-white"
                 : i < step
@@ -386,21 +388,31 @@ export function RoomWizard({
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700">시작 시간</label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+              <select
+                value={startTime.split(":")[0]}
+                onChange={(e) => setStartTime(`${e.target.value}:00`)}
                 className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-              />
+              >
+                {HOUR_OPTIONS.map((h) => (
+                  <option key={h} value={h}>
+                    {h}시
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700">종료 시간</label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+              <select
+                value={endTime.split(":")[0]}
+                onChange={(e) => setEndTime(`${e.target.value}:00`)}
                 className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-              />
+              >
+                {HOUR_OPTIONS.map((h) => (
+                  <option key={h} value={h}>
+                    {h}시
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700">실내/실외</label>
@@ -771,27 +783,33 @@ function MemberPickerGroup({
   return (
     <div>
       <h3 className="mb-2 text-sm font-semibold text-zinc-700">{title}</h3>
-      <ul className="flex flex-col divide-y divide-zinc-100">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {members.map((m) => {
           const isSelected = selected.has(m.id);
           const effectiveGrade = overrides[m.id] !== undefined ? overrides[m.id] : m.grade;
           return (
-            <li key={m.id} className="flex items-center justify-between py-1.5">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => onToggle(m.id)}
-                />
+            <div
+              key={m.id}
+              className={`flex flex-col gap-1.5 rounded-lg border-2 p-3 ${
+                isSelected ? "border-emerald-600 bg-emerald-50" : "border-zinc-200"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onToggle(m.id)}
+                className={`rounded-md py-2.5 text-base font-semibold ${
+                  isSelected ? "text-emerald-800" : "text-zinc-700"
+                }`}
+              >
                 {m.name}
-              </label>
+              </button>
               {isSelected && (
                 <select
                   value={effectiveGrade ?? ""}
                   onChange={(e) =>
                     onGradeChange(m.id, e.target.value === "" ? null : (e.target.value as Grade))
                   }
-                  className="rounded-md border border-zinc-300 px-2 py-0.5 text-xs"
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs"
                 >
                   <option value="">미지정</option>
                   <option value="A">A</option>
@@ -800,10 +818,10 @@ function MemberPickerGroup({
                   <option value="D">D</option>
                 </select>
               )}
-            </li>
+            </div>
           );
         })}
-      </ul>
+      </div>
     </div>
   );
 }

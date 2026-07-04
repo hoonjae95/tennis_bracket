@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "L.P.T 대진표",
   description: "Let's Play Tennis 클럽 대진표 자동 생성 서비스",
+  colorScheme: "light",
 };
 
 export default async function RootLayout({

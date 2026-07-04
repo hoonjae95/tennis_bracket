@@ -190,10 +190,10 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
       const mustPlay = forcedMustPlay(states);
       const mustRest = forcedMustRest(states);
 
+      const notPlayingYet = (s: PlayerState) => !playingThisRound.has(s.player.roomParticipantId);
+
       // pool = not already playing this round, not forced to rest
-      const availablePool = states.filter(
-        (s) => !playingThisRound.has(s.player.roomParticipantId) && !mustRest.has(s.player.roomParticipantId)
-      );
+      const availablePool = states.filter((s) => notPlayingYet(s) && !mustRest.has(s.player.roomParticipantId));
 
       // pick a match type: prefer one whose eligible pool (accounting for must-play backlog) is largest relative to need
       let picked: { type: MatchType; team1: PlayerState[]; team2: PlayerState[] } | null = null;
@@ -208,6 +208,25 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
         }
       }
 
+      // 조건(3연속 출전 금지)을 지키면 대진을 만들 수 없는 경우:
+      // 그냥 포기하지 않고, 3연속 출전 제한을 풀어서라도 경기를 배정한다.
+      // 대신 어떤 선수가 그 제약 때문에 강행 배정됐는지 비고로 남긴다.
+      let forcedNames: string[] = [];
+      if (!picked) {
+        const relaxedPool = states.filter(notPlayingYet);
+        for (const type of shuffledTypes) {
+          const eligible = eligiblePlayersFor(type, relaxedPool);
+          const built = buildMatch(type, eligible, mustPlay);
+          if (built) {
+            picked = { type, ...built };
+            forcedNames = [...built.team1, ...built.team2]
+              .filter((s) => mustRest.has(s.player.roomParticipantId))
+              .map((s) => s.player.name);
+            break;
+          }
+        }
+      }
+
       if (!picked) {
         warnings.push(`${round}라운드 코트${court + 1}: 조건에 맞는 대진을 만들지 못했습니다.`);
         continue;
@@ -219,6 +238,10 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
         matchType: picked.type,
         team1: picked.team1.map((s) => s.player),
         team2: picked.team2.map((s) => s.player),
+        note:
+          forcedNames.length > 0
+            ? `${forcedNames.join(", ")}님이 3경기 연속 진행중입니다!`
+            : undefined,
       });
 
       for (const s of [...picked.team1, ...picked.team2]) {

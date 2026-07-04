@@ -9,6 +9,7 @@ import {
   MATCH_TYPE_BADGE,
   GRADE_SCORE,
   GENDER_TEXT_COLOR,
+  minGenderCounts,
   type BracketPlayer,
   type GeneratedMatch,
   type MatchType,
@@ -90,6 +91,16 @@ export function BracketBuilder({
     });
   }
 
+  const maleCount = players.filter((p) => p.gender === "male").length;
+  const femaleCount = players.filter((p) => p.gender === "female").length;
+
+  function ineligibleReason(type: MatchType): string | null {
+    const { male, female } = minGenderCounts(type);
+    if (male > 0 && maleCount < male) return `남자 ${male}명 필요 (현재 ${maleCount}명)`;
+    if (female > 0 && femaleCount < female) return `여자 ${female}명 필요 (현재 ${femaleCount}명)`;
+    return null;
+  }
+
   function handleGenerate() {
     const result = generateBracket({
       players,
@@ -142,20 +153,27 @@ export function BracketBuilder({
       <div className="rounded-lg border border-zinc-200 bg-white p-4">
         <h2 className="mb-3 font-semibold text-zinc-800">경기 종류 선택 (다중 선택 가능)</h2>
         <div className="flex flex-wrap gap-2">
-          {ALL_MATCH_TYPES.map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => toggleType(type)}
-              className={`rounded-md border px-3 py-1.5 text-sm ${
-                selectedTypes.has(type)
-                  ? "border-emerald-600 bg-emerald-50 text-emerald-700"
-                  : "border-zinc-300 text-zinc-600"
-              }`}
-            >
-              {MATCH_TYPE_LABEL[type]}
-            </button>
-          ))}
+          {ALL_MATCH_TYPES.map((type) => {
+            const reason = ineligibleReason(type);
+            return (
+              <button
+                key={type}
+                type="button"
+                disabled={Boolean(reason)}
+                title={reason ?? undefined}
+                onClick={() => toggleType(type)}
+                className={`rounded-md border px-3 py-1.5 text-sm ${
+                  reason
+                    ? "cursor-not-allowed border-zinc-200 text-zinc-300"
+                    : selectedTypes.has(type)
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                    : "border-zinc-300 text-zinc-600"
+                }`}
+              >
+                {MATCH_TYPE_LABEL[type]}
+              </button>
+            );
+          })}
         </div>
         <p className="mt-3 text-sm text-zinc-500">
           참가자 {players.length}명 · 코트 {courts.length}개 · 코트당 {slotsPerCourt}경기 (총{" "}
@@ -230,35 +248,38 @@ function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: stri
   const t2sum = match.team2.reduce((s, p) => s + GRADE_SCORE[p.grade], 0);
 
   return (
-    <li className="flex items-center justify-between py-2 text-sm">
-      <span className="w-16 shrink-0 text-zinc-400">R{match.roundNo}</span>
-      <span className="w-28 shrink-0 text-xs text-zinc-400">{timeLabel}</span>
-      <span
-        className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs ${MATCH_TYPE_BADGE[match.matchType]}`}
-      >
-        {MATCH_TYPE_LABEL[match.matchType]}
-      </span>
-      <span className="flex-1 text-right text-zinc-800">
-        {match.team1.map((p, i) => (
-          <span key={p.roomParticipantId}>
-            {i > 0 && " · "}
-            <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
-            {`(${p.grade})`}
-          </span>
-        ))}
-      </span>
-      <span className="mx-2 shrink-0 text-xs text-zinc-400">
-        페어 점수 {t1sum} : {t2sum}
-      </span>
-      <span className="flex-1 text-zinc-800">
-        {match.team2.map((p, i) => (
-          <span key={p.roomParticipantId}>
-            {i > 0 && " · "}
-            <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
-            {`(${p.grade})`}
-          </span>
-        ))}
-      </span>
+    <li className="flex flex-col py-2 text-sm">
+      <div className="flex items-center justify-between">
+        <span className="w-16 shrink-0 text-zinc-400">R{match.roundNo}</span>
+        <span className="w-28 shrink-0 text-xs text-zinc-400">{timeLabel}</span>
+        <span
+          className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs ${MATCH_TYPE_BADGE[match.matchType]}`}
+        >
+          {MATCH_TYPE_LABEL[match.matchType]}
+        </span>
+        <span className="flex-1 text-right text-zinc-800">
+          {match.team1.map((p, i) => (
+            <span key={p.roomParticipantId}>
+              {i > 0 && " · "}
+              <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
+              {`(${p.grade})`}
+            </span>
+          ))}
+        </span>
+        <span className="mx-2 shrink-0 text-xs text-zinc-400">
+          페어 점수 {t1sum} : {t2sum}
+        </span>
+        <span className="flex-1 text-zinc-800">
+          {match.team2.map((p, i) => (
+            <span key={p.roomParticipantId}>
+              {i > 0 && " · "}
+              <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
+              {`(${p.grade})`}
+            </span>
+          ))}
+        </span>
+      </div>
+      {match.note && <p className="mt-1 text-right text-xs text-amber-600">비고: {match.note}</p>}
     </li>
   );
 }

@@ -23,6 +23,7 @@ export type GeneratedMatch = {
   matchType: MatchType;
   team1: BracketPlayer[];
   team2: BracketPlayer[];
+  note?: string; // 비고: 연속 출전 등 조건 미충족으로 강행 배정된 경우의 안내 문구
 };
 
 export type BracketGenerationInput = {
@@ -89,4 +90,13 @@ export function isDoubles(type: MatchType): boolean {
 
 export function playersPerTeam(type: MatchType): number {
   return isDoubles(type) ? 2 : 1;
+}
+
+// 성별별 최소 인원 (남/여). null이면 해당 성별 제약 없음(잡복식 등 성별 무관).
+export function minGenderCounts(type: MatchType): { male: number; female: number } {
+  const needed = playersPerTeam(type) * 2;
+  if (type === "mens_doubles" || type === "mens_singles") return { male: needed, female: 0 };
+  if (type === "womens_doubles" || type === "womens_singles") return { male: 0, female: needed };
+  if (type === "mixed_doubles") return { male: needed / 2, female: needed / 2 };
+  return { male: 0, female: 0 };
 }

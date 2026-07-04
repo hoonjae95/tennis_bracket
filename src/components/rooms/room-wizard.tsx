@@ -12,6 +12,7 @@ import {
   WARMUP_MINUTES_OPTIONS,
   RECOMMENDED_MINUTES_BY_GAMES,
   MATCH_TYPE_LABEL,
+  minGenderCounts,
   type CourtType,
   type MatchType,
 } from "@/lib/bracket/types";
@@ -111,6 +112,13 @@ export function RoomWizard({ members }: { members: Member[] }) {
   const maleMembers = members.filter((m) => m.gender === "male");
   const femaleMembers = members.filter((m) => m.gender === "female");
 
+  function ineligibleReason(type: MatchType): string | null {
+    const { male, female } = minGenderCounts(type);
+    if (male > 0 && maleMembers.length < male) return `남자 ${male}명 필요 (현재 회원 ${maleMembers.length}명)`;
+    if (female > 0 && femaleMembers.length < female) return `여자 ${female}명 필요 (현재 회원 ${femaleMembers.length}명)`;
+    return null;
+  }
+
   function toggleMember(id: string) {
     setSelectedMemberIds((prev) => {
       const next = new Set(prev);
@@ -132,6 +140,10 @@ export function RoomWizard({ members }: { members: Member[] }) {
     }
     if (currentStep === 2) {
       if (selectedMatchTypes.size === 0) return "경기 종류를 1개 이상 선택해주세요.";
+      for (const type of selectedMatchTypes) {
+        const reason = ineligibleReason(type);
+        if (reason) return `${MATCH_TYPE_LABEL[type]}: ${reason}`;
+      }
     }
     return null;
   }
@@ -455,20 +467,27 @@ export function RoomWizard({ members }: { members: Member[] }) {
               경기 종류 (다중 선택 가능)
             </label>
             <div className="flex flex-wrap gap-2">
-              {(isDoublesRoom ? DOUBLES_TYPES : SINGLES_TYPES).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => toggleMatchType(type)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    selectedMatchTypes.has(type)
-                      ? "border-emerald-600 bg-emerald-50 text-emerald-700"
-                      : "border-zinc-300 text-zinc-600"
-                  }`}
-                >
-                  {MATCH_TYPE_LABEL[type]}
-                </button>
-              ))}
+              {(isDoublesRoom ? DOUBLES_TYPES : SINGLES_TYPES).map((type) => {
+                const reason = ineligibleReason(type);
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    disabled={Boolean(reason)}
+                    title={reason ?? undefined}
+                    onClick={() => toggleMatchType(type)}
+                    className={`rounded-md border px-3 py-1.5 text-sm ${
+                      reason
+                        ? "cursor-not-allowed border-zinc-200 text-zinc-300"
+                        : selectedMatchTypes.has(type)
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                        : "border-zinc-300 text-zinc-600"
+                    }`}
+                  >
+                    {MATCH_TYPE_LABEL[type]}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

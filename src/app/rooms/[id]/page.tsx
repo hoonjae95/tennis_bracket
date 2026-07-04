@@ -66,6 +66,25 @@ export default async function RoomDetailPage({
     }
   }
 
+  const playingByRound = new Map<number, Set<string>>();
+  for (const m of matches ?? []) {
+    const set = playingByRound.get(m.round_no) ?? new Set<string>();
+    for (const mp of m.match_players) {
+      const pid = mp.room_participant?.id;
+      if (pid) set.add(pid);
+    }
+    playingByRound.set(m.round_no, set);
+  }
+
+  const restingByRound = Array.from(playingByRound.keys())
+    .sort((a, b) => a - b)
+    .map((roundNo) => {
+      const playing = playingByRound.get(roundNo)!;
+      const resting = (participants ?? []).filter((p) => !playing.has(p.id));
+      return { roundNo, resting };
+    })
+    .filter((r) => r.resting.length > 0);
+
   const slotsPerCourt = calcSlotsPerCourt({
     startTime: room.start_time,
     endTime: room.end_time,
@@ -191,13 +210,34 @@ export default async function RoomDetailPage({
         </div>
       )}
 
+      {restingByRound.length > 0 && (
+        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-4">
+          <h2 className="mb-2 font-semibold text-zinc-800">라운드별 휴식 선수</h2>
+          <ul className="flex flex-col divide-y divide-zinc-100 text-sm">
+            {restingByRound.map(({ roundNo, resting }) => (
+              <li key={roundNo} className="flex items-start gap-3 py-2">
+                <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
+                <span className="flex-1 text-zinc-700">
+                  {resting.map((p, i) => (
+                    <span key={p.id}>
+                      {i > 0 && " · "}
+                      <span className={GENDER_TEXT_COLOR[p.member?.gender as Gender]}>{p.member?.name}</span>
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {participants && participants.length > 0 && (
         <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-4">
           <h2 className="mb-2 font-semibold text-zinc-800">선수별 참가 경기 수</h2>
           <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
             {participants.map((p) => (
               <div key={p.id} className="flex justify-between text-zinc-700">
-                <span>{p.member?.name}</span>
+                <span className={GENDER_TEXT_COLOR[p.member?.gender as Gender]}>{p.member?.name}</span>
                 <span className="text-zinc-500">{gameCountByParticipant.get(p.id) ?? 0}경기</span>
               </div>
             ))}

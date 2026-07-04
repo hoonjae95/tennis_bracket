@@ -5,6 +5,7 @@ import {
   type FreePracticeSlot,
   type GeneratedMatch,
   type MatchType,
+  type RestingPlayers,
   GRADE_SCORE,
   playersPerTeam,
 } from "@/lib/bracket/types";
@@ -176,6 +177,7 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
     return {
       matches: [],
       freePracticeSlots: [],
+      restingPlayersByRound: [],
       playerStats: new Map(),
       warnings: ["경기 종류를 1개 이상 선택해주세요."],
     };
@@ -203,6 +205,7 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
   const stateById = new Map(states.map((s) => [s.player.roomParticipantId, s]));
   const matches: GeneratedMatch[] = [];
   const freePracticeSlots: FreePracticeSlot[] = [];
+  const restingPlayersByRound: RestingPlayers[] = [];
 
   for (let round = 1; round <= slotsPerCourt; round++) {
     const playingThisRound = new Set<string>();
@@ -242,8 +245,8 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
 
       // 조건(3연속 출전 금지)을 지키면 대진을 만들 수 없는 경우:
       // 그냥 포기하지 않고, 3연속 출전 제한을 풀어서라도 경기를 배정한다.
-      // 대신 어떤 선수가 그 제약 때문에 강행 배정됐는지 비고로 남긴다.
-      let forcedNames: string[] = [];
+      // 대신 어떤 선수가 그 제약 때문에 강행 배정됐는지, 실제 몇 연속째인지 비고로 남긴다.
+      let forced: PlayerState[] = [];
       if (!picked) {
         const relaxedPool = states.filter(notPlayingYet);
         for (const type of shuffledTypes) {
@@ -251,9 +254,9 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
           const built = buildMatch(type, eligible, mustPlay);
           if (built) {
             picked = { type, ...built };
-            forcedNames = [...built.team1, ...built.team2]
-              .filter((s) => mustRest.has(s.player.roomParticipantId))
-              .map((s) => s.player.name);
+            forced = [...built.team1, ...built.team2].filter((s) =>
+              mustRest.has(s.player.roomParticipantId)
+            );
             break;
           }
         }
@@ -268,9 +271,9 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
           buildMatch(GENDER_FREE_FALLBACK_TYPE, relaxedPool, mustPlay);
         if (built) {
           picked = { type: GENDER_FREE_FALLBACK_TYPE, ...built };
-          forcedNames = [...built.team1, ...built.team2]
-            .filter((s) => mustRest.has(s.player.roomParticipantId))
-            .map((s) => s.player.name);
+          forced = [...built.team1, ...built.team2].filter((s) =>
+            mustRest.has(s.player.roomParticipantId)
+          );
         }
       }
 
@@ -279,21 +282,30 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
         continue;
       }
 
+      // consecutivePlay는 "이전까지" 연속 출전 라운드 수이므로, 이번 라운드까지 포함하면 +1
+      const forcedNote = forced
+        .map((s) => `${s.player.name}님이 ${s.consecutivePlay + 1}경기 연속 진행중입니다!`)
+        .join(" ");
+
       matches.push({
         courtIndex: court,
         roundNo: round,
         matchType: picked.type,
         team1: picked.team1.map((s) => s.player),
         team2: picked.team2.map((s) => s.player),
-        note:
-          forcedNames.length > 0
-            ? `${forcedNames.join(", ")}님이 3경기 연속 진행중입니다!`
-            : undefined,
+        note: forcedNote || undefined,
       });
 
       for (const s of [...picked.team1, ...picked.team2]) {
         playingThisRound.add(s.player.roomParticipantId);
       }
+    }
+
+    const resting = states
+      .filter((s) => !playingThisRound.has(s.player.roomParticipantId))
+      .map((s) => s.player);
+    if (resting.length > 0) {
+      restingPlayersByRound.push({ roundNo: round, players: resting });
     }
 
     // update consecutive counters + games played after this round is fully assigned
@@ -329,5 +341,5 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
   }
 
   void stateById;
-  return { matches, freePracticeSlots, playerStats, warnings };
+  return { matches, freePracticeSlots, restingPlayersByRound, playerStats, warnings };
 }

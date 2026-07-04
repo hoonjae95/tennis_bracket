@@ -39,9 +39,16 @@ export type FreePracticeSlot = {
   roundNo: number;
 };
 
+// 라운드별로 실제 쉬는 선수 명단
+export type RestingPlayers = {
+  roundNo: number;
+  players: BracketPlayer[];
+};
+
 export type BracketGenerationResult = {
   matches: GeneratedMatch[];
   freePracticeSlots: FreePracticeSlot[];
+  restingPlayersByRound: RestingPlayers[];
   playerStats: Map<string, { gamesPlayed: number }>;
   warnings: string[];
 };
@@ -74,8 +81,8 @@ export const COURT_TYPE_LABEL: Record<CourtType, string> = {
 
 // 5분 단위, 20~40분
 export const MATCH_MINUTES_OPTIONS = [20, 25, 30, 35, 40] as const;
-// 5분 단위, 5~15분 (경기 사이 휴식)
-export const BREAK_MINUTES_OPTIONS = [5, 10, 15] as const;
+// 0~15분 (경기 사이 휴식, 0은 휴식 없음)
+export const BREAK_MINUTES_OPTIONS = [0, 5, 10, 15] as const;
 // 5분 단위, 20~40분 (몸풀기)
 export const WARMUP_MINUTES_OPTIONS = [20, 25, 30, 35, 40] as const;
 

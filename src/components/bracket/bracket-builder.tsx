@@ -14,6 +14,7 @@ import {
   type FreePracticeSlot,
   type GeneratedMatch,
   type MatchType,
+  type RestingPlayers,
 } from "@/lib/bracket/types";
 
 type Court = { id: string; name: string; sort_order: number };
@@ -61,6 +62,7 @@ export function BracketBuilder({
     existingMatches.length > 0 ? mapExistingToGenerated(existingMatches, courts, players) : null
   );
   const [freePracticeSlots, setFreePracticeSlots] = useState<FreePracticeSlot[]>([]);
+  const [restingPlayersByRound, setRestingPlayersByRound] = useState<RestingPlayers[]>([]);
   const [isSaving, startSaving] = useTransition();
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -112,6 +114,7 @@ export function BracketBuilder({
     });
     setGenerated(result.matches);
     setFreePracticeSlots(result.freePracticeSlots);
+    setRestingPlayersByRound(result.restingPlayersByRound);
     setWarnings(result.warnings);
     setSaveMessage(null);
   }
@@ -161,6 +164,11 @@ export function BracketBuilder({
     for (const arr of map.values()) arr.sort((a, b) => a.roundNo - b.roundNo);
     return map;
   }, [freePracticeSlots]);
+
+  const sortedRestingPlayersByRound = useMemo(
+    () => [...restingPlayersByRound].sort((a, b) => a.roundNo - b.roundNo),
+    [restingPlayersByRound]
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -220,7 +228,7 @@ export function BracketBuilder({
             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
               {players.map((p) => (
                 <div key={p.roomParticipantId} className="flex justify-between text-zinc-700">
-                  <span>{p.name}</span>
+                  <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
                   <span className="text-zinc-500">{statsByPlayer.get(p.roomParticipantId) ?? 0}경기</span>
                 </div>
               ))}
@@ -253,6 +261,27 @@ export function BracketBuilder({
               );
             })}
           </div>
+
+          {sortedRestingPlayersByRound.length > 0 && (
+            <div className="rounded-lg border border-zinc-200 bg-white p-4">
+              <h2 className="mb-3 font-semibold text-zinc-800">라운드별 휴식 선수</h2>
+              <ul className="flex flex-col divide-y divide-zinc-100 text-sm">
+                {sortedRestingPlayersByRound.map(({ roundNo, players: restingPlayers }) => (
+                  <li key={roundNo} className="flex items-start gap-3 py-2">
+                    <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
+                    <span className="flex-1 text-zinc-700">
+                      {restingPlayers.map((p, i) => (
+                        <span key={p.roomParticipantId}>
+                          {i > 0 && " · "}
+                          <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
+                        </span>
+                      ))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <button

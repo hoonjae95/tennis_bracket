@@ -9,6 +9,8 @@ export type MatchType =
 export type Gender = "male" | "female";
 export type Grade = "A" | "B" | "C" | "D";
 export type CourtType = "artificial_grass" | "hard_court" | "clay_court";
+// normal: 참가자별 경기수 차이 최대 1 허용, tournament: 성별 그룹별 경기수를 최대한 동일하게 강제
+export type FairnessMode = "normal" | "tournament";
 
 export type BracketPlayer = {
   roomParticipantId: string;
@@ -37,6 +39,7 @@ export type BracketGenerationInput = {
   courtCount: number;
   slotsPerCourt: number;
   enabledMatchTypes: MatchType[];
+  fairnessMode?: FairnessMode; // 기본값 "normal"
 };
 
 // 참가 인원이 부족해 특정 라운드에 경기를 배정할 수 없는 코트: 자유 랠리 연습으로 안내

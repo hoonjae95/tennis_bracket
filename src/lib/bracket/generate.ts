@@ -3,6 +3,7 @@ import {
   type BracketGenerationResult,
   type BracketPlayer,
   type ConsecutivePlayNote,
+  type FairnessMode,
   type FreePracticeSlot,
   type GeneratedMatch,
   type MatchType,
@@ -39,13 +40,28 @@ function eligiblePlayersFor(
   return states;
 }
 
-function forcedMustPlay(states: PlayerState[]): Set<string> {
-  // 3연속 휴식 방지: 이미 2연속 쉰 사람은 이번 라운드에 반드시 뛰어야 함
-  return new Set(
+function forcedMustPlay(states: PlayerState[], fairnessMode: FairnessMode): Set<string> {
+  const ids = new Set(
     states
+      // 3연속 휴식 방지: 이미 2연속 쉰 사람은 이번 라운드에 반드시 뛰어야 함
       .filter((s) => s.consecutiveRest >= MAX_CONSECUTIVE_REST)
       .map((s) => s.player.roomParticipantId)
   );
+
+  if (fairnessMode === "tournament") {
+    // 대회 모드: 성별 그룹 내에서 아직 게임수가 최소치인 선수는 최대한 우선적으로 뛰게 해서
+    // 그룹 내 경기수 편차가 커지지 않도록 한다.
+    for (const gender of ["male", "female"] as const) {
+      const group = states.filter((s) => s.player.gender === gender);
+      if (group.length === 0) continue;
+      const minGames = Math.min(...group.map((s) => s.gamesPlayed));
+      for (const s of group) {
+        if (s.gamesPlayed === minGames) ids.add(s.player.roomParticipantId);
+      }
+    }
+  }
+
+  return ids;
 }
 
 function forcedMustRest(states: PlayerState[]): Set<string> {
@@ -179,7 +195,7 @@ function splitIntoTeams(
 }
 
 export function generateBracket(input: BracketGenerationInput): BracketGenerationResult {
-  const { players, courtCount, slotsPerCourt, enabledMatchTypes } = input;
+  const { players, courtCount, slotsPerCourt, enabledMatchTypes, fairnessMode = "normal" } = input;
   const warnings: string[] = [];
 
   if (enabledMatchTypes.length === 0) {
@@ -231,7 +247,7 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
         continue;
       }
 
-      const mustPlay = forcedMustPlay(states);
+      const mustPlay = forcedMustPlay(states, fairnessMode);
       const mustRest = forcedMustRest(states);
 
       const notPlayingYet = (s: PlayerState) => !playingThisRound.has(s.player.roomParticipantId);
@@ -343,15 +359,18 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
 
   // 성별 그룹별로 편차를 따로 체크 (남복/여복만 켠 경우 등 그룹 인원 차이로 인한
   // 자연스러운 총량 차이를 편차로 오인하지 않도록)
+  const allowedDiff = fairnessMode === "tournament" ? 0 : 1;
   for (const gender of ["male", "female"] as const) {
     const group = states.filter((s) => s.player.gender === gender);
     if (group.length === 0) continue;
     const counts = group.map((s) => s.gamesPlayed);
     const max = Math.max(...counts);
     const min = Math.min(...counts);
-    if (max - min > 1) {
+    if (max - min > allowedDiff) {
       warnings.push(
-        `${gender === "male" ? "남자" : "여자"} 선수 간 경기 수 편차가 ${max - min}게임입니다.`
+        `${gender === "male" ? "남자" : "여자"} 선수 간 경기 수 편차가 ${max - min}게임입니다.${
+          fairnessMode === "tournament" ? " (대회 모드: 혼복 등 성별 혼합 경기로 인해 완전 균등이 어려울 수 있습니다.)" : ""
+        }`
       );
     }
   }

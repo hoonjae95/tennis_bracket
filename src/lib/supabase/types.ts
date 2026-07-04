@@ -233,6 +233,7 @@ export type Database = {
           created_at: string
           end_time: string
           event_date: string
+          fairness_mode: Database["public"]["Enums"]["fairness_mode"]
           games_per_set: number
           id: string
           is_indoor: boolean
@@ -251,6 +252,7 @@ export type Database = {
           created_at?: string
           end_time: string
           event_date: string
+          fairness_mode?: Database["public"]["Enums"]["fairness_mode"]
           games_per_set?: number
           id?: string
           is_indoor?: boolean
@@ -269,6 +271,7 @@ export type Database = {
           created_at?: string
           end_time?: string
           event_date?: string
+          fairness_mode?: Database["public"]["Enums"]["fairness_mode"]
           games_per_set?: number
           id?: string
           is_indoor?: boolean
@@ -293,6 +296,7 @@ export type Database = {
     }
     Enums: {
       court_type: "artificial_grass" | "hard_court" | "clay_court"
+      fairness_mode: "normal" | "tournament"
       gender: "male" | "female"
       grade: "A" | "B" | "C" | "D"
       match_type:
@@ -435,6 +439,7 @@ export const Constants = {
   public: {
     Enums: {
       court_type: ["artificial_grass", "hard_court", "clay_court"],
+      fairness_mode: ["normal", "tournament"],
       gender: ["male", "female"],
       grade: ["A", "B", "C", "D"],
       match_type: [

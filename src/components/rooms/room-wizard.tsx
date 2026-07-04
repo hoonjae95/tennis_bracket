@@ -126,6 +126,12 @@ export function RoomWizard({ members }: { members: Member[] }) {
     return null;
   }
 
+  // 참가자 선택에 따라 더 이상 불가능해진 경기종류(예: 여자 부족으로 여자복식)는
+  // 검증/제출 시 자동으로 제외한다 (버튼에 남아있던 선택을 강제로 지우지 않고 무시만 함).
+  const effectiveMatchTypes = new Set(
+    Array.from(selectedMatchTypes).filter((type) => !ineligibleReason(type))
+  );
+
   function toggleMember(id: string) {
     setSelectedMemberIds((prev) => {
       const next = new Set(prev);
@@ -149,11 +155,7 @@ export function RoomWizard({ members }: { members: Member[] }) {
       if (selectedMemberIds.size === 0) return "참가 선수를 1명 이상 선택해주세요.";
     }
     if (currentStep === 3) {
-      if (selectedMatchTypes.size === 0) return "경기 종류를 1개 이상 선택해주세요.";
-      for (const type of selectedMatchTypes) {
-        const reason = ineligibleReason(type);
-        if (reason) return `${MATCH_TYPE_LABEL[type]}: ${reason}`;
-      }
+      if (effectiveMatchTypes.size === 0) return "경기 종류를 1개 이상 선택해주세요.";
     }
     return null;
   }
@@ -194,7 +196,7 @@ export function RoomWizard({ members }: { members: Member[] }) {
         warmupMinutes,
         courtNames,
         courtType,
-        matchTypes: Array.from(selectedMatchTypes),
+        matchTypes: Array.from(effectiveMatchTypes),
         participantMemberIds: Array.from(selectedMemberIds),
         gradeOverrides,
       });
@@ -561,7 +563,7 @@ export function RoomWizard({ members }: { members: Member[] }) {
             </dd>
             <dt className="text-zinc-500">경기 종류</dt>
             <dd className="text-zinc-900">
-              {Array.from(selectedMatchTypes).map((t) => MATCH_TYPE_LABEL[t]).join(", ")}
+              {Array.from(effectiveMatchTypes).map((t) => MATCH_TYPE_LABEL[t]).join(", ")}
             </dd>
           </dl>
           <div className="rounded-md bg-emerald-50 p-4">

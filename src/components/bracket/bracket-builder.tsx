@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { generateBracket } from "@/lib/bracket/generate";
 import { calcSlotsPerCourt, calcRoundTimeRange } from "@/lib/rooms/game-calc";
 import { saveBracket } from "@/lib/bracket/actions";
@@ -10,6 +10,7 @@ import {
   GRADE_SCORE,
   GENDER_TEXT_COLOR,
   minGenderCounts,
+  isDoubles,
   type BracketPlayer,
   type FreePracticeSlot,
   type GeneratedMatch,
@@ -61,6 +62,10 @@ export function BracketBuilder({
   const [generated, setGenerated] = useState<GeneratedMatch[] | null>(
     existingMatches.length > 0 ? mapExistingToGenerated(existingMatches, courts, players) : null
   );
+
+  // 방이 복식/단식 중 어느 쪽으로 만들어졌는지에 따라 선택 가능한 경기 종류를 그 종류로만 제한한다.
+  const isDoublesRoom = room.matchTypes.length === 0 || room.matchTypes.some(isDoubles);
+  const availableMatchTypes = ALL_MATCH_TYPES.filter((t) => isDoubles(t) === isDoublesRoom);
   const [freePracticeSlots, setFreePracticeSlots] = useState<FreePracticeSlot[]>([]);
   const [restingPlayersByRound, setRestingPlayersByRound] = useState<RestingPlayers[]>([]);
   const [isSaving, startSaving] = useTransition();
@@ -87,12 +92,12 @@ export function BracketBuilder({
   }
 
   function toggleType(type: MatchType) {
-    setSelectedTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
+    const next = new Set(selectedTypes);
+    if (next.has(type)) next.delete(type);
+    else next.add(type);
+    setSelectedTypes(next);
+    // 경기 종류 선택을 바꾸면 바로 랜덤 대진표를 생성해준다.
+    if (next.size > 0) handleGenerate(next);
   }
 
   const maleCount = players.filter((p) => p.gender === "male").length;
@@ -105,12 +110,13 @@ export function BracketBuilder({
     return null;
   }
 
-  function handleGenerate() {
+  function handleGenerate(typesOverride?: Set<MatchType>) {
+    const types = typesOverride ?? selectedTypes;
     const result = generateBracket({
       players,
       courtCount: courts.length,
       slotsPerCourt,
-      enabledMatchTypes: Array.from(selectedTypes),
+      enabledMatchTypes: Array.from(types),
     });
     setGenerated(result.matches);
     setFreePracticeSlots(result.freePracticeSlots);
@@ -118,6 +124,14 @@ export function BracketBuilder({
     setWarnings(result.warnings);
     setSaveMessage(null);
   }
+
+  // 저장된 대진표가 없는 새 방이면, 경기 종류 선택 화면을 보자마자 바로 한 번 랜덤 대진표를 만들어준다.
+  useEffect(() => {
+    if (generated === null && selectedTypes.size > 0 && courts.length > 0 && slotsPerCourt > 0) {
+      handleGenerate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleSave() {
     if (!generated) return;
@@ -173,9 +187,10 @@ export function BracketBuilder({
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-lg border border-zinc-200 bg-white p-4">
-        <h2 className="mb-3 font-semibold text-zinc-800">경기 종류 선택 (다중 선택 가능)</h2>
+        <h2 className="font-semibold text-zinc-800">경기 종류 선택 (다중 선택 가능)</h2>
+        <p className="mb-3 text-xs text-zinc-500">누르면 바로 랜덤 생성됩니다.</p>
         <div className="flex flex-wrap gap-2">
-          {ALL_MATCH_TYPES.map((type) => {
+          {availableMatchTypes.map((type) => {
             const reason = ineligibleReason(type);
             return (
               <button
@@ -201,14 +216,17 @@ export function BracketBuilder({
           참가자 {players.length}명 · 코트 {courts.length}개 · 코트당 {slotsPerCourt}경기 (총{" "}
           {slotsPerCourt * courts.length}경기)
         </p>
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={selectedTypes.size === 0 || courts.length === 0 || slotsPerCourt === 0}
-          className="mt-3 rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
-        >
-          대진표 생성 (랜덤)
-        </button>
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleGenerate()}
+            disabled={selectedTypes.size === 0 || courts.length === 0 || slotsPerCourt === 0}
+            className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+          >
+            대진표 생성 (랜덤)
+          </button>
+          <span className="text-xs text-zinc-500">다시 랜덤으로 돌리려면 선택해주세요</span>
+        </div>
       </div>
 
       {warnings.length > 0 && (

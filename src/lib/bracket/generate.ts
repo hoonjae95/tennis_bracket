@@ -92,9 +92,17 @@ function buildMatch(
     return Math.random() - 0.5;
   });
 
-  // Candidate pool: take a generous slice biased toward players who need games,
-  // but consider enough people to find a balanced split.
-  const candidateSlice = sorted.slice(0, Math.min(sorted.length, Math.max(totalNeeded * 3, 8)));
+  // Candidate pool: must include every player tied at the lowest gamesPlayed count
+  // (so nobody gets a 2nd game while someone else is still waiting for their 1st),
+  // plus a bit more headroom to find a grade-balanced split.
+  const minGamesInPool = sorted.length > 0 ? sorted[0].gamesPlayed : 0;
+  const tiedAtMinCount = sorted.filter(
+    (s) => s.gamesPlayed === minGamesInPool || mustPlayIds.has(s.player.roomParticipantId)
+  ).length;
+  const candidateSlice = sorted.slice(
+    0,
+    Math.min(sorted.length, Math.max(totalNeeded * 3, 8, tiedAtMinCount))
+  );
 
   let best: { team1: PlayerState[]; team2: PlayerState[]; diff: number; priorityScore: number } | null =
     null;

@@ -2,11 +2,13 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { generateBracket } from "@/lib/bracket/generate";
-import { calcSlotsPerCourt } from "@/lib/rooms/game-calc";
+import { calcSlotsPerCourt, calcRoundTimeRange } from "@/lib/rooms/game-calc";
 import { saveBracket } from "@/lib/bracket/actions";
 import {
   MATCH_TYPE_LABEL,
+  MATCH_TYPE_BADGE,
   GRADE_SCORE,
+  GENDER_TEXT_COLOR,
   type BracketPlayer,
   type GeneratedMatch,
   type MatchType,
@@ -40,10 +42,19 @@ export function BracketBuilder({
   roomId: string;
   courts: Court[];
   players: BracketPlayer[];
-  room: { startTime: string; endTime: string; minutesPerMatch: number; breakMinutes: number };
+  room: {
+    startTime: string;
+    endTime: string;
+    minutesPerMatch: number;
+    breakMinutes: number;
+    warmupMinutes: number;
+    matchTypes: MatchType[];
+  };
   existingMatches: ExistingMatch[];
 }) {
-  const [selectedTypes, setSelectedTypes] = useState<Set<MatchType>>(new Set(["mens_doubles", "womens_doubles"]));
+  const [selectedTypes, setSelectedTypes] = useState<Set<MatchType>>(
+    new Set(room.matchTypes.length > 0 ? room.matchTypes : ["mens_doubles", "womens_doubles"])
+  );
   const [generated, setGenerated] = useState<GeneratedMatch[] | null>(
     existingMatches.length > 0 ? mapExistingToGenerated(existingMatches, courts, players) : null
   );
@@ -56,7 +67,19 @@ export function BracketBuilder({
     endTime: room.endTime,
     minutesPerMatch: room.minutesPerMatch,
     breakMinutes: room.breakMinutes,
+    warmupMinutes: room.warmupMinutes,
   });
+
+  function roundTimeLabel(roundNo: number): string {
+    const { start, end } = calcRoundTimeRange({
+      startTime: room.startTime,
+      minutesPerMatch: room.minutesPerMatch,
+      breakMinutes: room.breakMinutes,
+      warmupMinutes: room.warmupMinutes,
+      roundNo,
+    });
+    return `${start}~${end}`;
+  }
 
   function toggleType(type: MatchType) {
     setSelectedTypes((prev) => {
@@ -178,7 +201,7 @@ export function BracketBuilder({
                 <h3 className="mb-2 font-semibold text-zinc-800">코트 {court.name}</h3>
                 <ul className="flex flex-col divide-y divide-zinc-100">
                   {(matchesByCourt.get(idx) ?? []).map((m, i) => (
-                    <MatchRow key={i} match={m} />
+                    <MatchRow key={i} match={m} timeLabel={roundTimeLabel(m.roundNo)} />
                   ))}
                 </ul>
               </div>
@@ -202,24 +225,39 @@ export function BracketBuilder({
   );
 }
 
-function MatchRow({ match }: { match: GeneratedMatch }) {
+function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: string }) {
   const t1sum = match.team1.reduce((s, p) => s + GRADE_SCORE[p.grade], 0);
   const t2sum = match.team2.reduce((s, p) => s + GRADE_SCORE[p.grade], 0);
 
   return (
     <li className="flex items-center justify-between py-2 text-sm">
       <span className="w-16 shrink-0 text-zinc-400">R{match.roundNo}</span>
-      <span className="w-20 shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-center text-xs text-zinc-600">
+      <span className="w-28 shrink-0 text-xs text-zinc-400">{timeLabel}</span>
+      <span
+        className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs ${MATCH_TYPE_BADGE[match.matchType]}`}
+      >
         {MATCH_TYPE_LABEL[match.matchType]}
       </span>
       <span className="flex-1 text-right text-zinc-800">
-        {match.team1.map((p) => `${p.name}(${p.grade})`).join(" · ")}
+        {match.team1.map((p, i) => (
+          <span key={p.roomParticipantId}>
+            {i > 0 && " · "}
+            <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
+            {`(${p.grade})`}
+          </span>
+        ))}
       </span>
-      <span className="mx-2 text-zinc-400">
-        {t1sum} : {t2sum}
+      <span className="mx-2 shrink-0 text-xs text-zinc-400">
+        페어 점수 {t1sum} : {t2sum}
       </span>
       <span className="flex-1 text-zinc-800">
-        {match.team2.map((p) => `${p.name}(${p.grade})`).join(" · ")}
+        {match.team2.map((p, i) => (
+          <span key={p.roomParticipantId}>
+            {i > 0 && " · "}
+            <span className={GENDER_TEXT_COLOR[p.gender]}>{p.name}</span>
+            {`(${p.grade})`}
+          </span>
+        ))}
       </span>
     </li>
   );

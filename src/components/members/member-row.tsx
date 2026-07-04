@@ -12,6 +12,7 @@ const GRADE_BADGE: Record<string, string> = {
   A: "bg-amber-100 text-amber-800",
   B: "bg-sky-100 text-sky-800",
   C: "bg-zinc-200 text-zinc-700",
+  D: "bg-rose-100 text-rose-700",
 };
 
 export function MemberRow({ member }: { member: Member }) {
@@ -53,6 +54,7 @@ export function MemberRow({ member }: { member: Member }) {
             <option value="A">A</option>
             <option value="B">B</option>
             <option value="C">C</option>
+            <option value="D">D</option>
           </select>
           <label className="flex items-center gap-1 text-sm text-zinc-600">
             <input type="checkbox" name="is_active" defaultChecked={member.is_active} />

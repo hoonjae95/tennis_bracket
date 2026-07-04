@@ -5,12 +5,26 @@ import { useRouter } from "next/navigation";
 import { ROOM_TEMPLATES, TEMPLATE_LABEL, type RoomTemplateKey } from "@/lib/rooms/templates";
 import { calcSlotsPerCourt } from "@/lib/rooms/game-calc";
 import { createRoom } from "@/lib/rooms/actions";
+import {
+  COURT_TYPE_LABEL,
+  MATCH_MINUTES_OPTIONS,
+  BREAK_MINUTES_OPTIONS,
+  WARMUP_MINUTES_OPTIONS,
+  RECOMMENDED_MINUTES_BY_GAMES,
+  MATCH_TYPE_LABEL,
+  type CourtType,
+  type MatchType,
+} from "@/lib/bracket/types";
 import type { Database } from "@/lib/supabase/types";
 
 type Member = Pick<Database["public"]["Tables"]["members"]["Row"], "id" | "name" | "gender" | "grade">;
 type Grade = Database["public"]["Enums"]["grade"];
 
-const STEPS = ["일정 정보", "경기 규칙", "확인", "참가자 등록"] as const;
+const STEPS = ["일정 정보", "경기 규칙", "경기 종류", "확인", "참가자 등록"] as const;
+
+const COURT_TYPES: CourtType[] = ["artificial_grass", "hard_court", "clay_court"];
+const DOUBLES_TYPES: MatchType[] = ["mens_doubles", "womens_doubles", "mixed_doubles", "mixed_any_doubles"];
+const SINGLES_TYPES: MatchType[] = ["mens_singles", "womens_singles"];
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -31,13 +45,42 @@ export function RoomWizard({ members }: { members: Member[] }) {
   const [startTime, setStartTime] = useState("19:00");
   const [endTime, setEndTime] = useState("22:00");
   const [courtNamesText, setCourtNamesText] = useState("A, B");
+  const [courtType, setCourtType] = useState<CourtType>("hard_court");
 
   // Step 2 state
-  const [gamesPerSet, setGamesPerSet] = useState(5);
+  const [gamesPerSet, setGamesPerSetState] = useState(5);
   const [minutesPerMatch, setMinutesPerMatch] = useState(25);
   const [breakMinutes, setBreakMinutes] = useState(5);
+  const [warmupMinutes, setWarmupMinutes] = useState(20);
 
-  // Step 4 state
+  function setGamesPerSet(n: number) {
+    setGamesPerSetState(n);
+    setMinutesPerMatch(RECOMMENDED_MINUTES_BY_GAMES[n] ?? 25);
+  }
+
+  // Step 3 state (경기 종류)
+  const [isDoublesRoom, setIsDoublesRoom] = useState(true);
+  const [selectedMatchTypes, setSelectedMatchTypes] = useState<Set<MatchType>>(
+    new Set<MatchType>(["mens_doubles", "womens_doubles"])
+  );
+
+  function toggleMatchType(type: MatchType) {
+    setSelectedMatchTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }
+
+  function switchMatchKind(doubles: boolean) {
+    setIsDoublesRoom(doubles);
+    setSelectedMatchTypes(
+      new Set<MatchType>(doubles ? ["mens_doubles", "womens_doubles"] : ["mens_singles"])
+    );
+  }
+
+  // Step 5 state
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
   const [gradeOverrides, setGradeOverrides] = useState<Record<string, Grade | null>>({});
 
@@ -62,7 +105,7 @@ export function RoomWizard({ members }: { members: Member[] }) {
     setCourtNamesText(t.courtOptions[0].join(", "));
   }
 
-  const slotsPerCourt = calcSlotsPerCourt({ startTime, endTime, minutesPerMatch, breakMinutes });
+  const slotsPerCourt = calcSlotsPerCourt({ startTime, endTime, minutesPerMatch, breakMinutes, warmupMinutes });
   const totalMatches = slotsPerCourt * courtNames.length;
 
   const maleMembers = members.filter((m) => m.gender === "male");
@@ -85,8 +128,10 @@ export function RoomWizard({ members }: { members: Member[] }) {
       if (startTime >= endTime) return "종료 시간은 시작 시간보다 늦어야 합니다.";
     }
     if (currentStep === 1) {
-      if (minutesPerMatch % 5 !== 0) return "경기 시간은 5분 단위로 설정해주세요.";
       if (slotsPerCourt <= 0) return "설정된 시간 안에 경기를 진행할 수 없습니다. 시간을 조정해주세요.";
+    }
+    if (currentStep === 2) {
+      if (selectedMatchTypes.size === 0) return "경기 종류를 1개 이상 선택해주세요.";
     }
     return null;
   }
@@ -124,7 +169,10 @@ export function RoomWizard({ members }: { members: Member[] }) {
         gamesPerSet,
         minutesPerMatch,
         breakMinutes,
+        warmupMinutes,
         courtNames,
+        courtType,
+        matchTypes: Array.from(selectedMatchTypes),
         participantMemberIds: Array.from(selectedMemberIds),
         gradeOverrides,
       });
@@ -257,6 +305,26 @@ export function RoomWizard({ members }: { members: Member[] }) {
               현재 {courtNames.length}개 코트: {courtNames.join(", ") || "-"}
             </p>
           </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">코트 유형</label>
+            <div className="flex flex-wrap gap-2">
+              {COURT_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setCourtType(type)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    courtType === type
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                      : "border-zinc-300 text-zinc-600"
+                  }`}
+                >
+                  {COURT_TYPE_LABEL[type]}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -282,39 +350,131 @@ export function RoomWizard({ members }: { members: Member[] }) {
                 </button>
               ))}
             </div>
+            <p className="mt-1 text-xs text-zinc-400">
+              도움말: 4게임 추천 20분 · 5게임 추천 25분 · 6게임 추천 30분 (게임 수 선택 시 자동 반영, 아래에서 조정 가능)
+            </p>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">
-              경기당 시간 (5분 단위)
-            </label>
-            <input
-              type="number"
-              step={5}
-              min={5}
-              value={minutesPerMatch}
-              onChange={(e) => setMinutesPerMatch(Number(e.target.value))}
-              className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-            />
-            <span className="ml-2 text-sm text-zinc-500">분</span>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">경기당 시간</label>
+            <div className="flex gap-2">
+              {MATCH_MINUTES_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setMinutesPerMatch(n)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    minutesPerMatch === n
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                      : "border-zinc-300 text-zinc-600"
+                  }`}
+                >
+                  {n}분
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">휴식 시간</label>
-            <input
-              type="number"
-              step={5}
-              min={0}
-              value={breakMinutes}
-              onChange={(e) => setBreakMinutes(Number(e.target.value))}
-              className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-            />
-            <span className="ml-2 text-sm text-zinc-500">분</span>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">휴식 시간 (경기 사이)</label>
+            <div className="flex gap-2">
+              {BREAK_MINUTES_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setBreakMinutes(n)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    breakMinutes === n
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                      : "border-zinc-300 text-zinc-600"
+                  }`}
+                >
+                  {n}분
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">몸풀기 시간</label>
+            <div className="flex gap-2">
+              {WARMUP_MINUTES_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setWarmupMinutes(n)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    warmupMinutes === n
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                      : "border-zinc-300 text-zinc-600"
+                  }`}
+                >
+                  {n}분
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-zinc-400">
+              일정 시작 후 몸풀기 시간이 지나고 나서 1라운드 경기가 시작됩니다.
+            </p>
           </div>
         </div>
       )}
 
       {step === 2 && (
+        <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">경기 방식</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => switchMatchKind(true)}
+                className={`rounded-md border px-4 py-2 text-sm ${
+                  isDoublesRoom
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                    : "border-zinc-300 text-zinc-600"
+                }`}
+              >
+                복식
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMatchKind(false)}
+                className={`rounded-md border px-4 py-2 text-sm ${
+                  !isDoublesRoom
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                    : "border-zinc-300 text-zinc-600"
+                }`}
+              >
+                단식
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">
+              경기 종류 (다중 선택 가능)
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {(isDoublesRoom ? DOUBLES_TYPES : SINGLES_TYPES).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => toggleMatchType(type)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    selectedMatchTypes.has(type)
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                      : "border-zinc-300 text-zinc-600"
+                  }`}
+                >
+                  {MATCH_TYPE_LABEL[type]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
         <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4">
           <h2 className="font-semibold text-zinc-800">설정 요약</h2>
           <dl className="grid grid-cols-2 gap-y-2 text-sm">
@@ -329,10 +489,16 @@ export function RoomWizard({ members }: { members: Member[] }) {
               {location} ({isIndoor ? "실내" : "실외"})
             </dd>
             <dt className="text-zinc-500">코트</dt>
-            <dd className="text-zinc-900">{courtNames.join(", ")} ({courtNames.length}개)</dd>
+            <dd className="text-zinc-900">
+              {courtNames.join(", ")} ({courtNames.length}개, {COURT_TYPE_LABEL[courtType]})
+            </dd>
             <dt className="text-zinc-500">경기 방식</dt>
             <dd className="text-zinc-900">
-              {gamesPerSet}게임 선승 · {minutesPerMatch}분/경기 · 휴식 {breakMinutes}분
+              {gamesPerSet}게임 선승 · {minutesPerMatch}분/경기 · 휴식 {breakMinutes}분 · 몸풀기 {warmupMinutes}분
+            </dd>
+            <dt className="text-zinc-500">경기 종류</dt>
+            <dd className="text-zinc-900">
+              {Array.from(selectedMatchTypes).map((t) => MATCH_TYPE_LABEL[t]).join(", ")}
             </dd>
           </dl>
           <div className="rounded-md bg-emerald-50 p-4">
@@ -344,7 +510,7 @@ export function RoomWizard({ members }: { members: Member[] }) {
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4">
           <p className="text-sm text-zinc-500">
             이번 일정에 참여할 선수를 선택하세요. 방 안에서만 적용되는 등급 조정도 가능합니다.
@@ -447,6 +613,7 @@ function MemberPickerGroup({
                   <option value="A">A</option>
                   <option value="B">B</option>
                   <option value="C">C</option>
+                  <option value="D">D</option>
                 </select>
               )}
             </li>

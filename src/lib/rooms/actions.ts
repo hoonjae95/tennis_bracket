@@ -7,6 +7,8 @@ import type { Database } from "@/lib/supabase/types";
 
 type RoomTemplate = Database["public"]["Enums"]["room_template"];
 type Grade = Database["public"]["Enums"]["grade"];
+type CourtType = Database["public"]["Enums"]["court_type"];
+type MatchType = Database["public"]["Enums"]["match_type"];
 
 export type CreateRoomInput = {
   title: string;
@@ -19,7 +21,10 @@ export type CreateRoomInput = {
   gamesPerSet: number;
   minutesPerMatch: number;
   breakMinutes: number;
+  warmupMinutes: number;
   courtNames: string[];
+  courtType: CourtType;
+  matchTypes: MatchType[];
   participantMemberIds: string[];
   gradeOverrides: Record<string, Grade | null>;
 };
@@ -44,6 +49,9 @@ export async function createRoom(input: CreateRoomInput): Promise<CreateRoomResu
   if (input.minutesPerMatch <= 0 || input.minutesPerMatch % 5 !== 0) {
     return { success: false, error: "경기 시간은 5분 단위로 설정해주세요." };
   }
+  if (input.matchTypes.length === 0) {
+    return { success: false, error: "경기 종류를 1개 이상 선택해주세요." };
+  }
   if (input.participantMemberIds.length === 0) {
     return { success: false, error: "참가 선수를 1명 이상 선택해주세요." };
   }
@@ -63,6 +71,8 @@ export async function createRoom(input: CreateRoomInput): Promise<CreateRoomResu
       games_per_set: input.gamesPerSet,
       minutes_per_match: input.minutesPerMatch,
       break_minutes: input.breakMinutes,
+      warmup_minutes: input.warmupMinutes,
+      match_types: input.matchTypes,
       status: "ready",
     })
     .select("id")
@@ -77,6 +87,7 @@ export async function createRoom(input: CreateRoomInput): Promise<CreateRoomResu
       room_id: room.id,
       name,
       sort_order: i,
+      court_type: input.courtType,
     }))
   );
 

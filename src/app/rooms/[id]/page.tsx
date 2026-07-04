@@ -1,6 +1,15 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { MATCH_TYPE_LABEL } from "@/lib/bracket/types";
+import { calcRoundTimeRange } from "@/lib/rooms/game-calc";
+import {
+  MATCH_TYPE_LABEL,
+  MATCH_TYPE_BADGE,
+  GRADE_SCORE,
+  GENDER_TEXT_COLOR,
+  type Grade,
+  type Gender,
+  type MatchType,
+} from "@/lib/bracket/types";
 
 const TEMPLATE_LABEL: Record<string, string> = {
   tuesday: "화요일 정기모임",
@@ -29,7 +38,7 @@ export default async function RoomDetailPage({
   const { data: matches } = await supabase
     .from("matches")
     .select(
-      "id, court_id, match_type, round_no, match_players(team, room_participant:room_participants(id, grade_override, member:members(name, grade)))"
+      "id, court_id, match_type, round_no, match_players(team, room_participant:room_participants(id, grade_override, member:members(name, gender, grade)))"
     )
     .eq("room_id", id)
     .order("round_no", { ascending: true });
@@ -65,7 +74,7 @@ export default async function RoomDetailPage({
         </p>
         <p className="text-sm text-zinc-500">
           {room.location} ({room.is_indoor ? "실내" : "실외"}) · {room.games_per_set}게임 선승 ·{" "}
-          {room.minutes_per_match}분/경기 · 휴식 {room.break_minutes}분
+          {room.minutes_per_match}분/경기 · 휴식 {room.break_minutes}분 · 몸풀기 {room.warmup_minutes}분
         </p>
         <span className="mt-2 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
           {room.status === "published" ? "대진표 확정" : room.status === "ready" ? "구성 완료" : "준비 중"}
@@ -85,18 +94,52 @@ export default async function RoomDetailPage({
                 {(matchesByCourt.get(court.id) ?? []).map((m) => {
                   const team1 = m.match_players.filter((mp) => mp.team === 1);
                   const team2 = m.match_players.filter((mp) => mp.team === 2);
+                  const effectiveGrade = (mp: (typeof team1)[number]): Grade =>
+                    (mp.room_participant?.grade_override ?? mp.room_participant?.member?.grade ?? "C") as Grade;
+                  const t1sum = team1.reduce((s, mp) => s + GRADE_SCORE[effectiveGrade(mp)], 0);
+                  const t2sum = team2.reduce((s, mp) => s + GRADE_SCORE[effectiveGrade(mp)], 0);
+                  const { start, end } = calcRoundTimeRange({
+                    startTime: room.start_time,
+                    minutesPerMatch: room.minutes_per_match,
+                    breakMinutes: room.break_minutes,
+                    warmupMinutes: room.warmup_minutes,
+                    roundNo: m.round_no,
+                  });
                   return (
                     <li key={m.id} className="flex items-center justify-between py-2 text-sm">
                       <span className="w-14 shrink-0 text-zinc-400">R{m.round_no}</span>
-                      <span className="w-20 shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-center text-xs text-zinc-600">
+                      <span className="w-28 shrink-0 text-xs text-zinc-400">
+                        {start}~{end}
+                      </span>
+                      <span
+                        className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs ${
+                          MATCH_TYPE_BADGE[m.match_type as MatchType] ?? "bg-zinc-100 text-zinc-600"
+                        }`}
+                      >
                         {MATCH_TYPE_LABEL[m.match_type as keyof typeof MATCH_TYPE_LABEL] ?? m.match_type}
                       </span>
                       <span className="flex-1 text-right text-zinc-800">
-                        {team1.map((mp) => mp.room_participant?.member?.name).join(" · ")}
+                        {team1.map((mp, i) => (
+                          <span key={mp.room_participant?.id ?? i}>
+                            {i > 0 && " · "}
+                            <span className={GENDER_TEXT_COLOR[mp.room_participant?.member?.gender as Gender]}>
+                              {mp.room_participant?.member?.name}
+                            </span>
+                          </span>
+                        ))}
                       </span>
-                      <span className="mx-3 text-zinc-400">vs</span>
+                      <span className="mx-2 shrink-0 text-xs text-zinc-400">
+                        페어 점수 {t1sum} : {t2sum}
+                      </span>
                       <span className="flex-1 text-zinc-800">
-                        {team2.map((mp) => mp.room_participant?.member?.name).join(" · ")}
+                        {team2.map((mp, i) => (
+                          <span key={mp.room_participant?.id ?? i}>
+                            {i > 0 && " · "}
+                            <span className={GENDER_TEXT_COLOR[mp.room_participant?.member?.gender as Gender]}>
+                              {mp.room_participant?.member?.name}
+                            </span>
+                          </span>
+                        ))}
                       </span>
                     </li>
                   );

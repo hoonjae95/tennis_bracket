@@ -16,7 +16,7 @@ export default async function RoomBracketPage({
 
   const { data: courts } = await supabase
     .from("courts")
-    .select("id, name, sort_order")
+    .select("id, name, sort_order, court_type")
     .eq("room_id", id)
     .order("sort_order", { ascending: true });
 
@@ -46,6 +46,8 @@ export default async function RoomBracketPage({
           endTime: room.end_time,
           minutesPerMatch: room.minutes_per_match,
           breakMinutes: room.break_minutes,
+          warmupMinutes: room.warmup_minutes,
+          matchTypes: room.match_types,
         }}
         existingMatches={existingMatches ?? []}
       />

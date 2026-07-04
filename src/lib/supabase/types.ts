@@ -41,6 +41,7 @@ export type Database = {
     Tables: {
       courts: {
         Row: {
+          court_type: Database["public"]["Enums"]["court_type"]
           created_at: string
           id: string
           name: string
@@ -48,6 +49,7 @@ export type Database = {
           sort_order: number
         }
         Insert: {
+          court_type?: Database["public"]["Enums"]["court_type"]
           created_at?: string
           id?: string
           name: string
@@ -55,6 +57,7 @@ export type Database = {
           sort_order?: number
         }
         Update: {
+          court_type?: Database["public"]["Enums"]["court_type"]
           created_at?: string
           id?: string
           name?: string
@@ -234,12 +237,14 @@ export type Database = {
           id: string
           is_indoor: boolean
           location: string
+          match_types: Database["public"]["Enums"]["match_type"][]
           minutes_per_match: number
           start_time: string
           status: Database["public"]["Enums"]["room_status"]
           template: Database["public"]["Enums"]["room_template"]
           title: string
           updated_at: string
+          warmup_minutes: number
         }
         Insert: {
           break_minutes?: number
@@ -250,12 +255,14 @@ export type Database = {
           id?: string
           is_indoor?: boolean
           location: string
+          match_types?: Database["public"]["Enums"]["match_type"][]
           minutes_per_match?: number
           start_time: string
           status?: Database["public"]["Enums"]["room_status"]
           template?: Database["public"]["Enums"]["room_template"]
           title: string
           updated_at?: string
+          warmup_minutes?: number
         }
         Update: {
           break_minutes?: number
@@ -266,12 +273,14 @@ export type Database = {
           id?: string
           is_indoor?: boolean
           location?: string
+          match_types?: Database["public"]["Enums"]["match_type"][]
           minutes_per_match?: number
           start_time?: string
           status?: Database["public"]["Enums"]["room_status"]
           template?: Database["public"]["Enums"]["room_template"]
           title?: string
           updated_at?: string
+          warmup_minutes?: number
         }
         Relationships: []
       }
@@ -283,8 +292,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      court_type: "artificial_grass" | "hard_court" | "clay_court"
       gender: "male" | "female"
-      grade: "A" | "B" | "C"
+      grade: "A" | "B" | "C" | "D"
       match_type:
         | "mens_doubles"
         | "womens_doubles"
@@ -424,8 +434,9 @@ export const Constants = {
   },
   public: {
     Enums: {
+      court_type: ["artificial_grass", "hard_court", "clay_court"],
       gender: ["male", "female"],
-      grade: ["A", "B", "C"],
+      grade: ["A", "B", "C", "D"],
       match_type: [
         "mens_doubles",
         "womens_doubles",

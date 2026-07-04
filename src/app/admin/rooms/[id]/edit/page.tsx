@@ -35,9 +35,13 @@ export default async function EditRoomPage({
     .order("gender", { ascending: true })
     .order("name", { ascending: true });
 
+  // grade_override가 없는 참가자는 회원 기본 등급을 그대로 쓰는 것이므로,
+  // gradeOverrides에 null을 넣지 않는다 (넣으면 "미지정"으로 표시되어 등급이 풀린 것처럼 보임).
   const gradeOverrides: Record<string, Grade | null> = {};
   for (const p of participants ?? []) {
-    gradeOverrides[p.member_id] = p.grade_override;
+    if (p.grade_override !== null) {
+      gradeOverrides[p.member_id] = p.grade_override;
+    }
   }
 
   const initialData: RoomWizardInitialData = {

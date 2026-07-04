@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminAuthenticated } from "@/lib/auth/session";
 import type { Database } from "@/lib/supabase/types";
@@ -116,4 +117,19 @@ export async function createRoomAndRedirect(input: CreateRoomInput) {
     redirect(`/admin/rooms/${result.roomId}/bracket`);
   }
   return result;
+}
+
+export type DeleteRoomResult = { success: true } | { success: false; error: string };
+
+export async function deleteRoom(roomId: string): Promise<DeleteRoomResult> {
+  const ok = await isAdminAuthenticated();
+  if (!ok) return { success: false, error: "Unauthorized" };
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("rooms").delete().eq("id", roomId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/");
+  return { success: true };
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminAuthenticated } from "@/lib/auth/session";
+import { DeleteRoomButton } from "@/components/rooms/delete-room-button";
 
 const TEMPLATE_LABEL: Record<string, string> = {
   tuesday: "화요일 정기모임",
@@ -42,14 +43,14 @@ export default async function HomePage() {
       ) : (
         <ul className="flex flex-col gap-3">
           {rooms.map((room) => (
-            <li key={room.id}>
+            <li key={room.id} className="relative">
               <Link
                 href={`/rooms/${room.id}`}
                 className="block rounded-lg border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 pr-12">
                   <h2 className="font-semibold text-zinc-900">{room.title}</h2>
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                     {TEMPLATE_LABEL[room.template] ?? room.template}
                   </span>
                 </div>
@@ -60,6 +61,11 @@ export default async function HomePage() {
                   상태: {room.status === "published" ? "대진표 확정" : room.status === "ready" ? "구성 완료" : "준비 중"}
                 </div>
               </Link>
+              {isAdmin && (
+                <div className="absolute right-4 top-4">
+                  <DeleteRoomButton roomId={room.id} roomTitle={room.title} />
+                </div>
+              )}
             </li>
           ))}
         </ul>

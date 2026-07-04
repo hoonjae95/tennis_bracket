@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SiteHeader } from "@/components/site-header";
 import { isAdminAuthenticated } from "@/lib/auth/session";
@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "L.P.T 대진표",
   description: "Let's Play Tennis 클럽 대진표 자동 생성 서비스",
+};
+
+export const viewport: Viewport = {
   colorScheme: "light",
 };
 

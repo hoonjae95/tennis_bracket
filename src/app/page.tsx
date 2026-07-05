@@ -18,7 +18,7 @@ function RoomCard({ room, isAdmin }: { room: Room; isAdmin: boolean }) {
         href={`/rooms/${room.id}`}
         className="block rounded-lg border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow"
       >
-        <div className="flex items-center justify-between gap-2 pr-24 sm:pr-28">
+        <div className={`flex items-center justify-between gap-2 ${isAdmin ? "pr-24 sm:pr-28" : ""}`}>
           <h2 className="min-w-0 truncate font-semibold text-zinc-900">{room.title}</h2>
           <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
             {TEMPLATE_LABEL[room.template] ?? room.template}

@@ -98,8 +98,8 @@ export default async function RoomDetailPage({
       <div className="mb-6">
         <h1 className="text-xl font-bold text-zinc-900">{room.title}</h1>
         <p className="mt-1 text-sm text-zinc-500">
-          {TEMPLATE_LABEL[room.template] ?? room.template} · {room.event_date} · {room.start_time}~
-          {room.end_time}
+          {TEMPLATE_LABEL[room.template] ?? room.template} · {room.event_date} · {room.start_time.slice(0, 5)}~
+          {room.end_time.slice(0, 5)}
         </p>
         <p className="text-sm text-zinc-500">
           {room.location} ({room.is_indoor ? "실내" : "실외"}) · {room.games_per_set}게임 선승 ·{" "}

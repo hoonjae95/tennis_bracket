@@ -79,13 +79,16 @@ export function BracketBuilder({
   // 코트 예약 자체는 room.startTime~endTime 그대로지만, 참가자가 늦게 다 모이는 등의 이유로
   // 실제 대진표 생성은 다른 시각부터 시작하고 싶을 때 이 값만 바꿔서 재계산한다. (방 정보 자체는 수정하지 않음)
   const [effectiveStartTime, setEffectiveStartTime] = useState(room.startTime.slice(0, 5));
+  // 실제 시작 시각을 재설정했다는 건 그 시각까지 이미 몸을 풀고 왔다는 뜻이므로, 몸풀기 시간 없이 바로 경기를 시작한다.
+  const isRescheduled = effectiveStartTime !== room.startTime.slice(0, 5);
+  const effectiveWarmupMinutes = isRescheduled ? 0 : room.warmupMinutes;
 
   const slotsPerCourt = calcSlotsPerCourt({
     startTime: effectiveStartTime,
     endTime: room.endTime,
     minutesPerMatch: room.minutesPerMatch,
     breakMinutes: room.breakMinutes,
-    warmupMinutes: room.warmupMinutes,
+    warmupMinutes: effectiveWarmupMinutes,
     wrapupMinutes: room.wrapupMinutes,
   });
 
@@ -94,7 +97,7 @@ export function BracketBuilder({
       startTime: effectiveStartTime,
       minutesPerMatch: room.minutesPerMatch,
       breakMinutes: room.breakMinutes,
-      warmupMinutes: room.warmupMinutes,
+      warmupMinutes: effectiveWarmupMinutes,
       roundNo,
     });
     return `${start}~${end}`;
@@ -121,12 +124,14 @@ export function BracketBuilder({
 
   function handleGenerate(typesOverride?: Set<MatchType>, startTimeOverride?: string) {
     const types = typesOverride ?? selectedTypes;
+    const startTime = startTimeOverride ?? effectiveStartTime;
+    const warmupMinutes = startTime !== room.startTime.slice(0, 5) ? 0 : room.warmupMinutes;
     const slots = calcSlotsPerCourt({
-      startTime: startTimeOverride ?? effectiveStartTime,
+      startTime,
       endTime: room.endTime,
       minutesPerMatch: room.minutesPerMatch,
       breakMinutes: room.breakMinutes,
-      warmupMinutes: room.warmupMinutes,
+      warmupMinutes,
       wrapupMinutes: room.wrapupMinutes,
     });
     const result = generateBracket({
@@ -229,10 +234,10 @@ export function BracketBuilder({
             }}
             className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
           />
-          {effectiveStartTime !== room.startTime.slice(0, 5) && (
+          {isRescheduled && (
             <span className="text-xs text-amber-700">
-              코트 예약 시간({room.startTime.slice(0, 5)}~{room.endTime.slice(0, 5)})은 그대로 두고, 이 시각부터
-              대진표만 다시 짭니다.
+              코트 예약 시간({room.startTime.slice(0, 5)}~{room.endTime.slice(0, 5)})은 그대로 두고, 몸풀기 없이 이
+              시각부터 바로 경기를 시작하는 대진표로 다시 짭니다.
             </span>
           )}
         </div>
@@ -352,8 +357,8 @@ export function BracketBuilder({
               ].sort((a, b) => a.roundNo - b.roundNo);
 
               const warmup =
-                room.warmupMinutes > 0
-                  ? calcWarmupTimeRange({ startTime: effectiveStartTime, warmupMinutes: room.warmupMinutes })
+                effectiveWarmupMinutes > 0
+                  ? calcWarmupTimeRange({ startTime: effectiveStartTime, warmupMinutes: effectiveWarmupMinutes })
                   : null;
 
               const wrapup =
@@ -362,7 +367,7 @@ export function BracketBuilder({
                       startTime: effectiveStartTime,
                       minutesPerMatch: room.minutesPerMatch,
                       breakMinutes: room.breakMinutes,
-                      warmupMinutes: room.warmupMinutes,
+                      warmupMinutes: effectiveWarmupMinutes,
                       wrapupMinutes: room.wrapupMinutes,
                       lastRoundNo: slotsPerCourt,
                     })

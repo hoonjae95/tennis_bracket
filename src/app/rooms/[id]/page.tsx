@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminAuthenticated } from "@/lib/auth/session";
@@ -96,6 +97,13 @@ export default async function RoomDetailPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
+      <Link
+        href="/"
+        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline"
+      >
+        ← 전체 일정 목록 보러가기
+      </Link>
+
       <div className="mb-6">
         <h1 className="text-xl font-bold text-zinc-900">{room.title}</h1>
         <p className="mt-1 text-sm text-zinc-500">
@@ -311,6 +319,15 @@ export default async function RoomDetailPage({
           })}
         </BracketBody>
       )}
+
+      <div className="mt-6 text-center">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline"
+        >
+          전체 일정 목록 보러가기 →
+        </Link>
+      </div>
     </div>
   );
 }

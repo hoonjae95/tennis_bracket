@@ -39,7 +39,7 @@ function RoomCard({ room, isAdmin }: { room: Room; isAdmin: boolean }) {
         </div>
       </Link>
       {isAdmin && (
-        <div className="absolute right-4 top-4 flex items-center gap-2">
+        <div className="absolute right-4 top-11 flex items-center gap-2">
           <Link
             href={`/admin/rooms/${room.id}/edit`}
             className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-600 hover:border-emerald-300 hover:text-emerald-700"

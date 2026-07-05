@@ -76,9 +76,12 @@ export function BracketBuilder({
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
+  // 코트 예약 자체는 room.startTime~endTime 그대로지만, 참가자가 늦게 다 모이는 등의 이유로
+  // 실제 대진표 생성은 다른 시각부터 시작하고 싶을 때 이 값만 바꿔서 재계산한다. (방 정보 자체는 수정하지 않음)
+  const [effectiveStartTime, setEffectiveStartTime] = useState(room.startTime.slice(0, 5));
 
   const slotsPerCourt = calcSlotsPerCourt({
-    startTime: room.startTime,
+    startTime: effectiveStartTime,
     endTime: room.endTime,
     minutesPerMatch: room.minutesPerMatch,
     breakMinutes: room.breakMinutes,
@@ -88,7 +91,7 @@ export function BracketBuilder({
 
   function roundTimeLabel(roundNo: number): string {
     const { start, end } = calcRoundTimeRange({
-      startTime: room.startTime,
+      startTime: effectiveStartTime,
       minutesPerMatch: room.minutesPerMatch,
       breakMinutes: room.breakMinutes,
       warmupMinutes: room.warmupMinutes,
@@ -116,12 +119,20 @@ export function BracketBuilder({
     return null;
   }
 
-  function handleGenerate(typesOverride?: Set<MatchType>) {
+  function handleGenerate(typesOverride?: Set<MatchType>, startTimeOverride?: string) {
     const types = typesOverride ?? selectedTypes;
+    const slots = calcSlotsPerCourt({
+      startTime: startTimeOverride ?? effectiveStartTime,
+      endTime: room.endTime,
+      minutesPerMatch: room.minutesPerMatch,
+      breakMinutes: room.breakMinutes,
+      warmupMinutes: room.warmupMinutes,
+      wrapupMinutes: room.wrapupMinutes,
+    });
     const result = generateBracket({
       players,
       courtCount: courts.length,
-      slotsPerCourt,
+      slotsPerCourt: slots,
       enabledMatchTypes: Array.from(types),
       fairnessMode: room.fairnessMode,
     });
@@ -204,6 +215,27 @@ export function BracketBuilder({
           )}
         </div>
         <p className="mb-3 text-xs text-zinc-500">누르면 바로 랜덤 생성됩니다.</p>
+        <div className="mb-3 flex items-center gap-2">
+          <label htmlFor="effective-start-time" className="text-sm text-zinc-600">
+            실제 대진표 시작 시각
+          </label>
+          <input
+            id="effective-start-time"
+            type="time"
+            value={effectiveStartTime}
+            onChange={(e) => {
+              setEffectiveStartTime(e.target.value);
+              handleGenerate(undefined, e.target.value);
+            }}
+            className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+          />
+          {effectiveStartTime !== room.startTime.slice(0, 5) && (
+            <span className="text-xs text-amber-700">
+              코트 예약 시간({room.startTime.slice(0, 5)}~{room.endTime.slice(0, 5)})은 그대로 두고, 이 시각부터
+              대진표만 다시 짭니다.
+            </span>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           {availableMatchTypes.map((type) => {
             const reason = ineligibleReason(type);
@@ -321,13 +353,13 @@ export function BracketBuilder({
 
               const warmup =
                 room.warmupMinutes > 0
-                  ? calcWarmupTimeRange({ startTime: room.startTime, warmupMinutes: room.warmupMinutes })
+                  ? calcWarmupTimeRange({ startTime: effectiveStartTime, warmupMinutes: room.warmupMinutes })
                   : null;
 
               const wrapup =
                 room.fairnessMode === "tournament" && room.wrapupMinutes > 0 && slotsPerCourt > 0
                   ? calcWrapupTimeRange({
-                      startTime: room.startTime,
+                      startTime: effectiveStartTime,
                       minutesPerMatch: room.minutesPerMatch,
                       breakMinutes: room.breakMinutes,
                       warmupMinutes: room.warmupMinutes,

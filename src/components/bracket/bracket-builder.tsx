@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { generateBracket } from "@/lib/bracket/generate";
 import { calcSlotsPerCourt, calcRoundTimeRange, calcWarmupTimeRange, calcWrapupTimeRange } from "@/lib/rooms/game-calc";
 import { saveBracket } from "@/lib/bracket/actions";
@@ -73,6 +74,7 @@ export function BracketBuilder({
   const [restingPlayersByRound, setRestingPlayersByRound] = useState<RestingPlayers[]>([]);
   const [isSaving, startSaving] = useTransition();
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
 
   const slotsPerCourt = calcSlotsPerCourt({
@@ -147,6 +149,7 @@ export function BracketBuilder({
         courts.map((c) => c.id)
       );
       setSaveMessage(result.success ? "저장되었습니다." : `저장 실패: ${result.error}`);
+      setSaveSuccess(result.success);
     });
   }
 
@@ -369,6 +372,14 @@ export function BracketBuilder({
               {isSaving ? "저장 중..." : "대진표 저장 및 공개"}
             </button>
             {saveMessage && <p className="text-sm text-zinc-600">{saveMessage}</p>}
+            {saveSuccess && (
+              <Link
+                href={`/rooms/${roomId}`}
+                className="rounded-md border border-emerald-700 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+              >
+                방 조회하러 가기
+              </Link>
+            )}
           </div>
         </>
       )}

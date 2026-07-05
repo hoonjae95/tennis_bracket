@@ -605,7 +605,9 @@ export function RoomWizard({
             onGradeChange={(id, g) => setGradeOverrides((prev) => ({ ...prev, [id]: g }))}
           />
           <p className="text-sm text-zinc-600">
-            선택됨: {selectedMemberIds.size}명 (남 {selectedMaleCount}명 · 여 {selectedFemaleCount}명)
+            선택됨: {selectedMemberIds.size}명 (
+            <span className="text-blue-700">남 {selectedMaleCount}명</span> ·{" "}
+            <span className="text-pink-700">여 {selectedFemaleCount}명</span>)
           </p>
         </div>
       )}
@@ -645,7 +647,8 @@ export function RoomWizard({
               경기 종류 (다중 선택 가능)
             </label>
             <p className="mb-2 text-xs text-zinc-400">
-              선택된 참가자 기준 남 {selectedMaleCount}명 · 여 {selectedFemaleCount}명 — 인원이 부족한 종류는 선택할 수 없습니다.
+              선택된 참가자 기준 <span className="text-blue-700">남 {selectedMaleCount}명</span> ·{" "}
+              <span className="text-pink-700">여 {selectedFemaleCount}명</span> — 인원이 부족한 종류는 선택할 수 없습니다.
             </p>
             <div className="flex flex-wrap gap-2">
               {(isDoublesRoom ? DOUBLES_TYPES : SINGLES_TYPES).map((type) => {
@@ -699,7 +702,9 @@ export function RoomWizard({
             </dd>
             <dt className="text-zinc-500">참가자</dt>
             <dd className="text-zinc-900">
-              {selectedMemberIds.size}명 (남 {selectedMaleCount}명 · 여 {selectedFemaleCount}명)
+              {selectedMemberIds.size}명 (
+              <span className="text-blue-700">남 {selectedMaleCount}명</span> ·{" "}
+              <span className="text-pink-700">여 {selectedFemaleCount}명</span>)
             </dd>
             <dt className="text-zinc-500">경기 종류</dt>
             <dd className="text-zinc-900">
@@ -787,18 +792,23 @@ function MemberPickerGroup({
         {members.map((m) => {
           const isSelected = selected.has(m.id);
           const effectiveGrade = overrides[m.id] !== undefined ? overrides[m.id] : m.grade;
+          const genderSelectedClass =
+            m.gender === "male"
+              ? "border-blue-600 bg-blue-50"
+              : "border-pink-600 bg-pink-50";
+          const genderTextClass = m.gender === "male" ? "text-blue-800" : "text-pink-800";
           return (
             <div
               key={m.id}
               className={`flex flex-col gap-1.5 rounded-lg border-2 p-3 ${
-                isSelected ? "border-emerald-600 bg-emerald-50" : "border-zinc-200"
+                isSelected ? genderSelectedClass : "border-zinc-200"
               }`}
             >
               <button
                 type="button"
                 onClick={() => onToggle(m.id)}
                 className={`rounded-md py-2.5 text-base font-semibold ${
-                  isSelected ? "text-emerald-800" : "text-zinc-700"
+                  isSelected ? genderTextClass : "text-zinc-700"
                 }`}
               >
                 {m.name}

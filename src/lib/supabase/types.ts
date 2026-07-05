@@ -236,6 +236,7 @@ export type Database = {
           fairness_mode: Database["public"]["Enums"]["fairness_mode"]
           games_per_set: number
           id: string
+          is_closed: boolean
           is_indoor: boolean
           location: string
           match_types: Database["public"]["Enums"]["match_type"][]
@@ -256,6 +257,7 @@ export type Database = {
           fairness_mode?: Database["public"]["Enums"]["fairness_mode"]
           games_per_set?: number
           id?: string
+          is_closed?: boolean
           is_indoor?: boolean
           location: string
           match_types?: Database["public"]["Enums"]["match_type"][]
@@ -276,6 +278,7 @@ export type Database = {
           fairness_mode?: Database["public"]["Enums"]["fairness_mode"]
           games_per_set?: number
           id?: string
+          is_closed?: boolean
           is_indoor?: boolean
           location?: string
           match_types?: Database["public"]["Enums"]["match_type"][]

@@ -274,3 +274,19 @@ export async function deleteRoom(roomId: string): Promise<DeleteRoomResult> {
   revalidatePath("/");
   return { success: true };
 }
+
+export type SetRoomClosedResult = { success: true } | { success: false; error: string };
+
+export async function setRoomClosed(roomId: string, isClosed: boolean): Promise<SetRoomClosedResult> {
+  const ok = await isAdminAuthenticated();
+  if (!ok) return { success: false, error: "Unauthorized" };
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("rooms").update({ is_closed: isClosed }).eq("id", roomId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/");
+  revalidatePath(`/rooms/${roomId}`);
+  return { success: true };
+}

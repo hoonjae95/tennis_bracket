@@ -38,6 +38,19 @@ const ALL_MATCH_TYPES: MatchType[] = [
   "womens_singles",
 ];
 
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
+const MINUTE_OPTIONS = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+
+// select 옵션은 5분 단위이므로, 방 시작 시각의 분이 5분 단위가 아니면 가장 가까운 5분 단위로 맞춘다.
+function roundToNearestFiveMinutes(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const rounded = Math.round(m / 5) * 5;
+  const carry = Math.floor(rounded / 60);
+  const mm = rounded % 60;
+  const hh = (h + carry) % 24;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
 export function BracketBuilder({
   roomId,
   courts,
@@ -78,9 +91,10 @@ export function BracketBuilder({
   const [warnings, setWarnings] = useState<string[]>([]);
   // 코트 예약 자체는 room.startTime~endTime 그대로지만, 참가자가 늦게 다 모이는 등의 이유로
   // 실제 대진표 생성은 다른 시각부터 시작하고 싶을 때 이 값만 바꿔서 재계산한다. (방 정보 자체는 수정하지 않음)
-  const [effectiveStartTime, setEffectiveStartTime] = useState(room.startTime.slice(0, 5));
+  const roomStartTime = roundToNearestFiveMinutes(room.startTime.slice(0, 5));
+  const [effectiveStartTime, setEffectiveStartTime] = useState(roomStartTime);
   // 실제 시작 시각을 재설정했다는 건 그 시각까지 이미 몸을 풀고 왔다는 뜻이므로, 몸풀기 시간 없이 바로 경기를 시작한다.
-  const isRescheduled = effectiveStartTime !== room.startTime.slice(0, 5);
+  const isRescheduled = effectiveStartTime !== roomStartTime;
   const effectiveWarmupMinutes = isRescheduled ? 0 : room.warmupMinutes;
 
   const slotsPerCourt = calcSlotsPerCourt({
@@ -125,7 +139,7 @@ export function BracketBuilder({
   function handleGenerate(typesOverride?: Set<MatchType>, startTimeOverride?: string) {
     const types = typesOverride ?? selectedTypes;
     const startTime = startTimeOverride ?? effectiveStartTime;
-    const warmupMinutes = startTime !== room.startTime.slice(0, 5) ? 0 : room.warmupMinutes;
+    const warmupMinutes = startTime !== roomStartTime ? 0 : room.warmupMinutes;
     const slots = calcSlotsPerCourt({
       startTime,
       endTime: room.endTime,
@@ -220,20 +234,40 @@ export function BracketBuilder({
           )}
         </div>
         <p className="mb-3 text-xs text-zinc-500">누르면 바로 랜덤 생성됩니다.</p>
-        <div className="mb-3 flex items-center gap-2">
-          <label htmlFor="effective-start-time" className="text-sm text-zinc-600">
-            실제 대진표 시작 시각
-          </label>
-          <input
-            id="effective-start-time"
-            type="time"
-            value={effectiveStartTime}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-zinc-600">실제 대진표 시작 시각</span>
+          <select
+            aria-label="시작 시각 - 시"
+            value={effectiveStartTime.split(":")[0]}
             onChange={(e) => {
-              setEffectiveStartTime(e.target.value);
-              handleGenerate(undefined, e.target.value);
+              const next = `${e.target.value}:${effectiveStartTime.split(":")[1]}`;
+              setEffectiveStartTime(next);
+              handleGenerate(undefined, next);
             }}
             className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
-          />
+          >
+            {HOUR_OPTIONS.map((h) => (
+              <option key={h} value={h}>
+                {h}시
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="시작 시각 - 분"
+            value={effectiveStartTime.split(":")[1]}
+            onChange={(e) => {
+              const next = `${effectiveStartTime.split(":")[0]}:${e.target.value}`;
+              setEffectiveStartTime(next);
+              handleGenerate(undefined, next);
+            }}
+            className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+          >
+            {MINUTE_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {m}분
+              </option>
+            ))}
+          </select>
           {isRescheduled && (
             <span className="text-xs text-amber-700">
               코트 예약 시간({room.startTime.slice(0, 5)}~{room.endTime.slice(0, 5)})은 그대로 두고, 몸풀기 없이 이

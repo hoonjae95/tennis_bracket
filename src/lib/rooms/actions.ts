@@ -8,9 +8,19 @@ import type { Database } from "@/lib/supabase/types";
 
 type RoomTemplate = Database["public"]["Enums"]["room_template"];
 type Grade = Database["public"]["Enums"]["grade"];
+type Gender = Database["public"]["Enums"]["gender"];
 type CourtType = Database["public"]["Enums"]["court_type"];
 type MatchType = Database["public"]["Enums"]["match_type"];
 type FairnessMode = Database["public"]["Enums"]["fairness_mode"];
+
+// 정회원(members)으로 등록되지 않고 이 방에서만 유효한 게스트.
+// id는 클라이언트에서 생성한 임시 키(신규) 또는 기존 room_participants.id(수정 시 유지)이며, DB insert에는 쓰이지 않는다.
+export type GuestParticipantInput = {
+  id: string;
+  name: string;
+  gender: Gender;
+  grade: Grade | null;
+};
 
 export type CreateRoomInput = {
   title: string;
@@ -31,6 +41,7 @@ export type CreateRoomInput = {
   fairnessMode: FairnessMode;
   participantMemberIds: string[];
   gradeOverrides: Record<string, Grade | null>;
+  guests: GuestParticipantInput[];
 };
 
 export type CreateRoomResult =
@@ -56,8 +67,11 @@ export async function createRoom(input: CreateRoomInput): Promise<CreateRoomResu
   if (input.matchTypes.length === 0) {
     return { success: false, error: "경기 종류를 1개 이상 선택해주세요." };
   }
-  if (input.participantMemberIds.length === 0) {
+  if (input.participantMemberIds.length === 0 && input.guests.length === 0) {
     return { success: false, error: "참가 선수를 1명 이상 선택해주세요." };
+  }
+  if (input.guests.some((g) => !g.name.trim())) {
+    return { success: false, error: "게스트 이름을 입력해주세요." };
   }
 
   const supabase = createAdminClient();
@@ -101,13 +115,22 @@ export async function createRoom(input: CreateRoomInput): Promise<CreateRoomResu
     return { success: false, error: courtsError.message };
   }
 
-  const { error: participantsError } = await supabase.from("room_participants").insert(
-    input.participantMemberIds.map((memberId) => ({
+  const participantRows = [
+    ...input.participantMemberIds.map((memberId) => ({
       room_id: room.id,
       member_id: memberId,
       grade_override: input.gradeOverrides[memberId] ?? null,
-    }))
-  );
+    })),
+    ...input.guests.map((guest) => ({
+      room_id: room.id,
+      member_id: null,
+      guest_name: guest.name.trim(),
+      guest_gender: guest.gender,
+      guest_grade: guest.grade,
+    })),
+  ];
+
+  const { error: participantsError } = await supabase.from("room_participants").insert(participantRows);
 
   if (participantsError) {
     return { success: false, error: participantsError.message };
@@ -149,8 +172,11 @@ export async function updateRoom(input: UpdateRoomInput): Promise<UpdateRoomResu
   if (input.matchTypes.length === 0) {
     return { success: false, error: "경기 종류를 1개 이상 선택해주세요." };
   }
-  if (input.participantMemberIds.length === 0) {
+  if (input.participantMemberIds.length === 0 && input.guests.length === 0) {
     return { success: false, error: "참가 선수를 1명 이상 선택해주세요." };
+  }
+  if (input.guests.some((g) => !g.name.trim())) {
+    return { success: false, error: "게스트 이름을 입력해주세요." };
   }
 
   const supabase = createAdminClient();
@@ -164,7 +190,7 @@ export async function updateRoom(input: UpdateRoomInput): Promise<UpdateRoomResu
 
   const { data: existingParticipants, error: existingParticipantsError } = await supabase
     .from("room_participants")
-    .select("id, member_id, grade_override")
+    .select("id, member_id, grade_override, guest_name, guest_gender, guest_grade")
     .eq("room_id", input.roomId);
   if (existingParticipantsError) return { success: false, error: existingParticipantsError.message };
 
@@ -174,11 +200,34 @@ export async function updateRoom(input: UpdateRoomInput): Promise<UpdateRoomResu
       (c, i) => c.name === input.courtNames[i] && c.court_type === input.courtType
     );
 
-  const existingMemberIds = new Set((existingParticipants ?? []).map((p) => p.member_id));
+  const existingMembers = (existingParticipants ?? []).filter(
+    (p): p is typeof p & { member_id: string } => p.member_id !== null
+  );
+  const existingGuests = (existingParticipants ?? []).filter((p) => p.member_id === null);
+
+  const existingMemberIds = new Set(existingMembers.map((p) => p.member_id));
   const newMemberIds = new Set(input.participantMemberIds);
-  const participantsUnchanged =
+  const membersUnchanged =
     existingMemberIds.size === newMemberIds.size &&
     Array.from(existingMemberIds).every((id) => newMemberIds.has(id));
+
+  // 기존 게스트 row(id)를 그대로 유지하는 게스트만 남아있고, 그 내용(이름/성별/등급)도 그대로면 변경 없음으로 본다.
+  const existingGuestIds = new Set(existingGuests.map((p) => p.id));
+  const newGuestIds = new Set(input.guests.map((g) => g.id));
+  const guestsUnchanged =
+    existingGuestIds.size === newGuestIds.size &&
+    Array.from(existingGuestIds).every((id) => newGuestIds.has(id)) &&
+    input.guests.every((g) => {
+      const existing = existingGuests.find((p) => p.id === g.id);
+      return (
+        existing &&
+        existing.guest_name === g.name.trim() &&
+        existing.guest_gender === g.gender &&
+        existing.guest_grade === g.grade
+      );
+    });
+
+  const participantsUnchanged = membersUnchanged && guestsUnchanged;
 
   const bracketReset = !courtsUnchanged || !participantsUnchanged;
 
@@ -231,17 +280,26 @@ export async function updateRoom(input: UpdateRoomInput): Promise<UpdateRoomResu
       .eq("room_id", input.roomId);
     if (deleteParticipantsError) return { success: false, error: deleteParticipantsError.message };
 
-    const { error: participantsError } = await supabase.from("room_participants").insert(
-      input.participantMemberIds.map((memberId) => ({
+    const participantRows = [
+      ...input.participantMemberIds.map((memberId) => ({
         room_id: input.roomId,
         member_id: memberId,
         grade_override: input.gradeOverrides[memberId] ?? null,
-      }))
-    );
+      })),
+      ...input.guests.map((guest) => ({
+        room_id: input.roomId,
+        member_id: null,
+        guest_name: guest.name.trim(),
+        guest_gender: guest.gender,
+        guest_grade: guest.grade,
+      })),
+    ];
+
+    const { error: participantsError } = await supabase.from("room_participants").insert(participantRows);
     if (participantsError) return { success: false, error: participantsError.message };
   } else {
     // 참가자 명단은 그대로지만 등급 override만 바뀌었을 수 있으니 각 참가자 row를 갱신한다 (대진표 보존).
-    for (const p of existingParticipants ?? []) {
+    for (const p of existingMembers) {
       const nextOverride = input.gradeOverrides[p.member_id] ?? null;
       if (nextOverride !== p.grade_override) {
         const { error: updateError } = await supabase

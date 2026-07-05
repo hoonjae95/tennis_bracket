@@ -17,6 +17,7 @@ export type BracketPlayer = {
   name: string;
   gender: Gender;
   grade: Grade; // effective grade (override applied), defaults to 'C' if unset
+  isGuest?: boolean; // 정회원(members)이 아니라 이 방에서만 등록된 게스트인 경우
 };
 
 // 비고: 같은 연속 출전 횟수를 겪는 선수들을 묶어서 표시하기 위한 그룹

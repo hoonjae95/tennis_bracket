@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ROOM_TEMPLATES, TEMPLATE_LABEL, type RoomTemplateKey } from "@/lib/rooms/templates";
 import { calcSlotsPerCourt } from "@/lib/rooms/game-calc";
-import { createRoom, updateRoom } from "@/lib/rooms/actions";
+import { createRoom, updateRoom, type GuestParticipantInput } from "@/lib/rooms/actions";
 import {
   COURT_TYPE_LABEL,
   MATCH_MINUTES_OPTIONS,
@@ -13,16 +13,22 @@ import {
   WRAPUP_MINUTES_OPTIONS,
   RECOMMENDED_MINUTES_BY_GAMES,
   MATCH_TYPE_LABEL,
+  GENDER_TEXT_COLOR,
   minGenderCounts,
   isDoubles,
   type CourtType,
   type FairnessMode,
+  type Gender,
   type MatchType,
 } from "@/lib/bracket/types";
 import type { Database } from "@/lib/supabase/types";
 
 type Member = Pick<Database["public"]["Tables"]["members"]["Row"], "id" | "name" | "gender" | "grade">;
 type Grade = Database["public"]["Enums"]["grade"];
+
+function makeGuestId() {
+  return `guest-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
 
 const STEPS = ["일정 정보", "경기 규칙", "참가자 등록", "경기 종류", "확인"] as const;
 
@@ -56,6 +62,7 @@ export type RoomWizardInitialData = {
   fairnessMode: FairnessMode;
   participantMemberIds: string[];
   gradeOverrides: Record<string, Grade | null>;
+  guests: GuestParticipantInput[];
 };
 
 export function RoomWizard({
@@ -132,6 +139,27 @@ export function RoomWizard({
   const [gradeOverrides, setGradeOverrides] = useState<Record<string, Grade | null>>(
     initialData?.gradeOverrides ?? {}
   );
+  // 정회원(members)이 아니라 이 방에서만 유효한 게스트. id는 신규는 클라이언트에서 생성한 임시 키,
+  // 편집 모드로 불러온 기존 게스트는 room_participants.id를 그대로 써서 서버에서 변경 여부를 판단할 수 있게 한다.
+  const [guests, setGuests] = useState<GuestParticipantInput[]>(initialData?.guests ?? []);
+  const [guestNameInput, setGuestNameInput] = useState("");
+  const [guestGenderInput, setGuestGenderInput] = useState<Gender>("male");
+  const [guestGradeInput, setGuestGradeInput] = useState<Grade | null>(null);
+
+  function addGuest() {
+    const name = guestNameInput.trim();
+    if (!name) return;
+    setGuests((prev) => [
+      ...prev,
+      { id: makeGuestId(), name, gender: guestGenderInput, grade: guestGradeInput },
+    ]);
+    setGuestNameInput("");
+    setGuestGradeInput(null);
+  }
+
+  function removeGuest(id: string) {
+    setGuests((prev) => prev.filter((g) => g.id !== id));
+  }
 
   const courtNames = useMemo(
     () =>
@@ -173,12 +201,13 @@ export function RoomWizard({
   const maleMembers = members.filter((m) => m.gender === "male");
   const femaleMembers = members.filter((m) => m.gender === "female");
 
-  const selectedMaleCount = members.filter(
-    (m) => m.gender === "male" && selectedMemberIds.has(m.id)
-  ).length;
-  const selectedFemaleCount = members.filter(
-    (m) => m.gender === "female" && selectedMemberIds.has(m.id)
-  ).length;
+  const selectedMaleCount =
+    members.filter((m) => m.gender === "male" && selectedMemberIds.has(m.id)).length +
+    guests.filter((g) => g.gender === "male").length;
+  const selectedFemaleCount =
+    members.filter((m) => m.gender === "female" && selectedMemberIds.has(m.id)).length +
+    guests.filter((g) => g.gender === "female").length;
+  const totalParticipantCount = selectedMemberIds.size + guests.length;
 
   function ineligibleReason(type: MatchType): string | null {
     const { male, female } = minGenderCounts(type);
@@ -213,7 +242,7 @@ export function RoomWizard({
       if (slotsPerCourt <= 0) return "설정된 시간 안에 경기를 진행할 수 없습니다. 시간을 조정해주세요.";
     }
     if (currentStep === 2) {
-      if (selectedMemberIds.size === 0) return "참가 선수를 1명 이상 선택해주세요.";
+      if (totalParticipantCount === 0) return "참가 선수를 1명 이상 선택해주세요.";
     }
     if (currentStep === 3) {
       if (effectiveMatchTypes.size === 0) return "경기 종류를 1개 이상 선택해주세요.";
@@ -237,7 +266,7 @@ export function RoomWizard({
   }
 
   function handleSubmit() {
-    if (selectedMemberIds.size === 0) {
+    if (totalParticipantCount === 0) {
       setError("참가 선수를 1명 이상 선택해주세요.");
       return;
     }
@@ -262,6 +291,7 @@ export function RoomWizard({
         fairnessMode,
         participantMemberIds: Array.from(selectedMemberIds),
         gradeOverrides,
+        guests,
       };
 
       if (isEditMode && initialData) {
@@ -284,6 +314,15 @@ export function RoomWizard({
   }
 
   // 편집 모드에서 코트 구성/참가자 명단이 원래 값과 달라지면 저장 시 기존 대진표가 초기화된다.
+  const initialGuestIds = new Set((initialData?.guests ?? []).map((g) => g.id));
+  const guestIds = new Set(guests.map((g) => g.id));
+  const guestsChanged =
+    initialGuestIds.size !== guestIds.size ||
+    Array.from(initialGuestIds).some((id) => !guestIds.has(id)) ||
+    guests.some((g) => {
+      const original = (initialData?.guests ?? []).find((og) => og.id === g.id);
+      return !original || original.name !== g.name || original.gender !== g.gender || original.grade !== g.grade;
+    });
   const bracketWillReset =
     isEditMode &&
     initialData !== undefined &&
@@ -291,7 +330,8 @@ export function RoomWizard({
       courtNames.some((name, i) => name !== initialData.courtNames[i]) ||
       courtType !== initialData.courtType ||
       selectedMemberIds.size !== initialData.participantMemberIds.length ||
-      initialData.participantMemberIds.some((id) => !selectedMemberIds.has(id)));
+      initialData.participantMemberIds.some((id) => !selectedMemberIds.has(id)) ||
+      guestsChanged);
 
   return (
     <div className="flex flex-col gap-6">
@@ -604,10 +644,100 @@ export function RoomWizard({
             onToggle={toggleMember}
             onGradeChange={(id, g) => setGradeOverrides((prev) => ({ ...prev, [id]: g }))}
           />
+
+          <div className="border-t border-zinc-100 pt-4">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-700">게스트 추가</h3>
+            <p className="mb-2 text-xs text-zinc-400">
+              정회원으로 등록되지 않은 게스트를 이 방에만 한시적으로 참가시킵니다.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={guestNameInput}
+                onChange={(e) => setGuestNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addGuest();
+                  }
+                }}
+                placeholder="이름"
+                className="w-28 rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-emerald-600"
+              />
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setGuestGenderInput("male")}
+                  className={`rounded-md border px-2.5 py-1.5 text-sm ${
+                    guestGenderInput === "male"
+                      ? "border-blue-600 bg-blue-50 text-blue-800"
+                      : "border-zinc-300 text-zinc-600"
+                  }`}
+                >
+                  남
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGuestGenderInput("female")}
+                  className={`rounded-md border px-2.5 py-1.5 text-sm ${
+                    guestGenderInput === "female"
+                      ? "border-pink-600 bg-pink-50 text-pink-800"
+                      : "border-zinc-300 text-zinc-600"
+                  }`}
+                >
+                  여
+                </button>
+              </div>
+              <select
+                value={guestGradeInput ?? ""}
+                onChange={(e) => setGuestGradeInput(e.target.value === "" ? null : (e.target.value as Grade))}
+                className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">등급 미지정</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+              </select>
+              <button
+                type="button"
+                onClick={addGuest}
+                disabled={!guestNameInput.trim()}
+                className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+              >
+                추가
+              </button>
+            </div>
+            {guests.length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {guests.map((g) => (
+                  <li
+                    key={g.id}
+                    className="flex items-center gap-2 rounded-full border border-zinc-300 bg-zinc-50 py-1 pl-3 pr-2 text-sm"
+                  >
+                    <span className={GENDER_TEXT_COLOR[g.gender]}>
+                      {g.name}
+                      {g.grade ? ` (${g.grade})` : ""}
+                    </span>
+                    <span className="rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-600">게스트</span>
+                    <button
+                      type="button"
+                      onClick={() => removeGuest(g.id)}
+                      className="text-zinc-400 hover:text-red-600"
+                      aria-label={`${g.name} 게스트 삭제`}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <p className="text-sm text-zinc-600">
-            선택됨: {selectedMemberIds.size}명 (
+            선택됨: {totalParticipantCount}명 (
             <span className="text-blue-700">남 {selectedMaleCount}명</span> ·{" "}
-            <span className="text-pink-700">여 {selectedFemaleCount}명</span>)
+            <span className="text-pink-700">여 {selectedFemaleCount}명</span>
+            {guests.length > 0 && <span className="text-zinc-500"> · 게스트 {guests.length}명 포함</span>})
           </p>
         </div>
       )}
@@ -702,9 +832,10 @@ export function RoomWizard({
             </dd>
             <dt className="text-zinc-500">참가자</dt>
             <dd className="text-zinc-900">
-              {selectedMemberIds.size}명 (
+              {totalParticipantCount}명 (
               <span className="text-blue-700">남 {selectedMaleCount}명</span> ·{" "}
-              <span className="text-pink-700">여 {selectedFemaleCount}명</span>)
+              <span className="text-pink-700">여 {selectedFemaleCount}명</span>
+              {guests.length > 0 && <span className="text-zinc-500"> · 게스트 {guests.length}명 포함</span>})
             </dd>
             <dt className="text-zinc-500">경기 종류</dt>
             <dd className="text-zinc-900">

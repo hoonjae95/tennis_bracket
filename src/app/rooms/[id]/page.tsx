@@ -20,6 +20,25 @@ import {
 } from "@/lib/bracket/types";
 import { PairScoreVisibilityProvider, VsOrPairScore } from "@/components/bracket/pair-score-visibility";
 
+type ParticipantLike = {
+  guest_name: string | null;
+  guest_gender: Gender | null;
+  guest_grade: Grade | null;
+  member: { name: string; gender: Gender; grade: Grade | null } | null;
+};
+
+function participantName(p: ParticipantLike): string {
+  return p.member?.name ?? p.guest_name ?? "";
+}
+
+function participantGender(p: ParticipantLike): Gender {
+  return (p.member?.gender ?? p.guest_gender ?? "male") as Gender;
+}
+
+function participantGrade(p: ParticipantLike): Grade | null {
+  return p.member?.grade ?? p.guest_grade ?? null;
+}
+
 export default async function RoomDetailPage({
   params,
 }: {
@@ -41,14 +60,14 @@ export default async function RoomDetailPage({
   const { data: matches } = await supabase
     .from("matches")
     .select(
-      "id, court_id, match_type, round_no, match_players(team, room_participant:room_participants(id, grade_override, member:members(name, gender, grade)))"
+      "id, court_id, match_type, round_no, match_players(team, room_participant:room_participants(id, grade_override, guest_name, guest_gender, guest_grade, member:members(name, gender, grade)))"
     )
     .eq("room_id", id)
     .order("round_no", { ascending: true });
 
   const { data: participants } = await supabase
     .from("room_participants")
-    .select("id, grade_override, member:members(name, gender, grade)")
+    .select("id, grade_override, guest_name, guest_gender, guest_grade, member:members(name, gender, grade)")
     .eq("room_id", id);
 
   const matchesByCourt = new Map<string, typeof matches>();
@@ -134,7 +153,7 @@ export default async function RoomDetailPage({
                   <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
                     {participants.map((p) => (
                       <div key={p.id} className="flex justify-between text-zinc-700">
-                        <span className={GENDER_TEXT_COLOR[p.member?.gender as Gender]}>{p.member?.name}</span>
+                        <span className={GENDER_TEXT_COLOR[participantGender(p)]}>{participantName(p)}</span>
                         <span className="text-zinc-500">{gameCountByParticipant.get(p.id) ?? 0}경기</span>
                       </div>
                     ))}
@@ -147,8 +166,8 @@ export default async function RoomDetailPage({
                   <h2 className="mb-2 font-semibold text-zinc-800">라운드별 휴식 선수</h2>
                   <ul className="flex flex-col divide-y divide-zinc-100 text-sm">
                     {restingByRound.map(({ roundNo, resting }) => {
-                      const maleResting = resting.filter((p) => p.member?.gender === "male");
-                      const femaleResting = resting.filter((p) => p.member?.gender === "female");
+                      const maleResting = resting.filter((p) => participantGender(p) === "male");
+                      const femaleResting = resting.filter((p) => participantGender(p) === "female");
                       return (
                         <li key={roundNo} className="flex items-start gap-3 py-2">
                           <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
@@ -158,7 +177,7 @@ export default async function RoomDetailPage({
                                 {maleResting.map((p, i) => (
                                   <span key={p.id}>
                                     {i > 0 && " · "}
-                                    {p.member?.name}
+                                    {participantName(p)}
                                   </span>
                                 ))}
                               </span>
@@ -168,7 +187,7 @@ export default async function RoomDetailPage({
                                 {femaleResting.map((p, i) => (
                                   <span key={p.id}>
                                     {i > 0 && " · "}
-                                    {p.member?.name}
+                                    {participantName(p)}
                                   </span>
                                 ))}
                               </span>
@@ -255,7 +274,9 @@ export default async function RoomDetailPage({
                       const team1 = m.match_players.filter((mp) => mp.team === 1);
                       const team2 = m.match_players.filter((mp) => mp.team === 2);
                       const effectiveGrade = (mp: (typeof team1)[number]): Grade =>
-                        (mp.room_participant?.grade_override ?? mp.room_participant?.member?.grade ?? "C") as Grade;
+                        (mp.room_participant?.grade_override ??
+                          (mp.room_participant ? participantGrade(mp.room_participant) : null) ??
+                          "C") as Grade;
                       const t1sum = team1.reduce((s, mp) => s + GRADE_SCORE[effectiveGrade(mp)], 0);
                       const t2sum = team2.reduce((s, mp) => s + GRADE_SCORE[effectiveGrade(mp)], 0);
 
@@ -279,8 +300,10 @@ export default async function RoomDetailPage({
                               {team1.map((mp, i) => (
                                 <span key={mp.room_participant?.id ?? i}>
                                   {i > 0 && " · "}
-                                  <span className={GENDER_TEXT_COLOR[mp.room_participant?.member?.gender as Gender]}>
-                                    {mp.room_participant?.member?.name}
+                                  <span
+                                    className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
+                                  >
+                                    {mp.room_participant ? participantName(mp.room_participant) : ""}
                                   </span>
                                 </span>
                               ))}
@@ -292,8 +315,10 @@ export default async function RoomDetailPage({
                               {team2.map((mp, i) => (
                                 <span key={mp.room_participant?.id ?? i}>
                                   {i > 0 && " · "}
-                                  <span className={GENDER_TEXT_COLOR[mp.room_participant?.member?.gender as Gender]}>
-                                    {mp.room_participant?.member?.name}
+                                  <span
+                                    className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
+                                  >
+                                    {mp.room_participant ? participantName(mp.room_participant) : ""}
                                   </span>
                                 </span>
                               ))}

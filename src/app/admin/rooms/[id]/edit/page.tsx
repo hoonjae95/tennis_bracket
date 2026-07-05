@@ -25,7 +25,7 @@ export default async function EditRoomPage({
 
   const { data: participants } = await supabase
     .from("room_participants")
-    .select("member_id, grade_override")
+    .select("id, member_id, grade_override, guest_name, guest_gender, guest_grade")
     .eq("room_id", id);
 
   const { data: members } = await supabase
@@ -39,10 +39,19 @@ export default async function EditRoomPage({
   // gradeOverrides에 null을 넣지 않는다 (넣으면 "미지정"으로 표시되어 등급이 풀린 것처럼 보임).
   const gradeOverrides: Record<string, Grade | null> = {};
   for (const p of participants ?? []) {
-    if (p.grade_override !== null) {
+    if (p.member_id !== null && p.grade_override !== null) {
       gradeOverrides[p.member_id] = p.grade_override;
     }
   }
+
+  const guests = (participants ?? [])
+    .filter((p) => p.member_id === null)
+    .map((p) => ({
+      id: p.id,
+      name: p.guest_name ?? "",
+      gender: p.guest_gender ?? "male",
+      grade: p.guest_grade,
+    }));
 
   const initialData: RoomWizardInitialData = {
     roomId: id,
@@ -62,8 +71,9 @@ export default async function EditRoomPage({
     wrapupMinutes: room.wrapup_minutes,
     matchTypes: (room.match_types ?? []) as MatchType[],
     fairnessMode: room.fairness_mode,
-    participantMemberIds: (participants ?? []).map((p) => p.member_id),
+    participantMemberIds: (participants ?? []).flatMap((p) => (p.member_id !== null ? [p.member_id] : [])),
     gradeOverrides,
+    guests,
   };
 
   return (

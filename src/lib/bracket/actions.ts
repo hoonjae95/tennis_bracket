@@ -11,18 +11,20 @@ export async function fetchRoomParticipants(roomId: string): Promise<BracketPlay
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("room_participants")
-    .select("id, grade_override, member:members(name, gender, grade)")
+    .select("id, grade_override, guest_name, guest_gender, guest_grade, member:members(name, gender, grade)")
     .eq("room_id", roomId);
 
   if (error || !data) return [];
 
   return data.map((row) => {
-    const member = row.member as unknown as { name: string; gender: "male" | "female"; grade: string | null };
+    const member = row.member as unknown as { name: string; gender: "male" | "female"; grade: string | null } | null;
+    const isGuest = member === null;
     return {
       roomParticipantId: row.id,
-      name: member.name,
-      gender: member.gender,
-      grade: (row.grade_override ?? member.grade ?? "C") as BracketPlayer["grade"],
+      name: isGuest ? row.guest_name! : member!.name,
+      gender: (isGuest ? row.guest_gender! : member!.gender) as BracketPlayer["gender"],
+      grade: (row.grade_override ?? (isGuest ? row.guest_grade : member!.grade) ?? "C") as BracketPlayer["grade"],
+      isGuest,
     };
   });
 }

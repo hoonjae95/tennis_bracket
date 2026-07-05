@@ -192,22 +192,31 @@ export type Database = {
         Row: {
           created_at: string
           grade_override: Database["public"]["Enums"]["grade"] | null
+          guest_gender: Database["public"]["Enums"]["gender"] | null
+          guest_grade: Database["public"]["Enums"]["grade"] | null
+          guest_name: string | null
           id: string
-          member_id: string
+          member_id: string | null
           room_id: string
         }
         Insert: {
           created_at?: string
           grade_override?: Database["public"]["Enums"]["grade"] | null
+          guest_gender?: Database["public"]["Enums"]["gender"] | null
+          guest_grade?: Database["public"]["Enums"]["grade"] | null
+          guest_name?: string | null
           id?: string
-          member_id: string
+          member_id?: string | null
           room_id: string
         }
         Update: {
           created_at?: string
           grade_override?: Database["public"]["Enums"]["grade"] | null
+          guest_gender?: Database["public"]["Enums"]["gender"] | null
+          guest_grade?: Database["public"]["Enums"]["grade"] | null
+          guest_name?: string | null
           id?: string
-          member_id?: string
+          member_id?: string | null
           room_id?: string
         }
         Relationships: [

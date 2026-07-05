@@ -74,6 +74,16 @@ export const MATCH_TYPE_LABEL: Record<MatchType, string> = {
   womens_singles: "여자 단식",
 };
 
+// 좁은 모바일 화면에서 경기 한 줄을 유지하기 위한 축약 표기
+export const MATCH_TYPE_LABEL_SHORT: Record<MatchType, string> = {
+  mens_doubles: "남복",
+  womens_doubles: "여복",
+  mixed_doubles: "혼복",
+  mixed_any_doubles: "잡복",
+  mens_singles: "남단",
+  womens_singles: "여단",
+};
+
 export const MATCH_TYPE_BADGE: Record<MatchType, string> = {
   mens_doubles: "bg-sky-100 text-sky-800",
   womens_doubles: "bg-pink-100 text-pink-800",

@@ -11,6 +11,7 @@ import {
 import { TEMPLATE_LABEL } from "@/lib/rooms/templates";
 import {
   MATCH_TYPE_LABEL,
+  MATCH_TYPE_LABEL_SHORT,
   MATCH_TYPE_BADGE,
   GRADE_SCORE,
   GENDER_TEXT_COLOR,
@@ -232,12 +233,12 @@ export default async function RoomDetailPage({
                 <h2 className="mb-2 font-semibold text-zinc-800">코트 {court.name}</h2>
                 <ul className="flex flex-col divide-y divide-zinc-100">
                   {warmup && (
-                    <li className="flex items-center py-2 text-sm">
-                      <span className="w-14 shrink-0 text-zinc-400"></span>
-                      <span className="w-28 shrink-0 text-xs text-zinc-400">
+                    <li className="flex items-center gap-1.5 py-2 text-xs sm:gap-2 sm:text-sm">
+                      <span className="w-8 shrink-0 text-zinc-400 sm:w-14"></span>
+                      <span className="w-20 shrink-0 text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
                         {warmup.start}~{warmup.end}
                       </span>
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-center text-xs text-zinc-500">
+                      <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-center text-[11px] text-zinc-500 sm:px-2 sm:text-xs">
                         몸풀기
                       </span>
                     </li>
@@ -258,12 +259,12 @@ export default async function RoomDetailPage({
 
                       if (row.kind === "free") {
                         return (
-                          <li key={`free-${row.roundNo}`} className="flex items-center py-2 text-sm">
-                            <span className="w-14 shrink-0 text-zinc-400">R{row.roundNo}</span>
-                            <span className="w-28 shrink-0 text-xs text-zinc-400">
+                          <li key={`free-${row.roundNo}`} className="flex items-center gap-1.5 py-2 text-xs sm:gap-2 sm:text-sm">
+                            <span className="w-8 shrink-0 text-zinc-400 sm:w-14">R{row.roundNo}</span>
+                            <span className="w-20 shrink-0 text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
                               {start}~{end}
                             </span>
-                            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-center text-xs text-zinc-500">
+                            <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-center text-[11px] text-zinc-500 sm:px-2 sm:text-xs">
                               자유 랠리 연습
                             </span>
                           </li>
@@ -281,59 +282,61 @@ export default async function RoomDetailPage({
                       const t2sum = team2.reduce((s, mp) => s + GRADE_SCORE[effectiveGrade(mp)], 0);
 
                       return (
-                        <li key={m.id} className="flex flex-col gap-1.5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-0">
-                          <div className="flex shrink-0 items-center gap-2 sm:contents">
-                            <span className="w-14 shrink-0 text-zinc-400">R{m.round_no}</span>
-                            <span className="w-28 shrink-0 text-xs text-zinc-400">
-                              {start}~{end}
+                        <li key={m.id} className="flex items-center gap-1 py-2 text-xs sm:gap-2 sm:text-sm">
+                          <span className="w-6 shrink-0 text-zinc-400 sm:w-14">R{m.round_no}</span>
+                          <span className="hidden shrink-0 text-xs text-zinc-400 sm:inline sm:w-28">
+                            {start}~{end}
+                          </span>
+                          <span className="w-11 shrink-0 text-[10px] text-zinc-400 sm:hidden">{end}</span>
+                          <span
+                            className={`w-8 shrink-0 whitespace-nowrap rounded-full px-1 py-0.5 text-center text-[10px] sm:w-20 sm:px-2 sm:text-xs ${
+                              MATCH_TYPE_BADGE[m.match_type as MatchType] ?? "bg-zinc-100 text-zinc-600"
+                            }`}
+                          >
+                            <span className="sm:hidden">
+                              {MATCH_TYPE_LABEL_SHORT[m.match_type as keyof typeof MATCH_TYPE_LABEL_SHORT] ?? m.match_type}
                             </span>
-                            <span
-                              className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs ${
-                                MATCH_TYPE_BADGE[m.match_type as MatchType] ?? "bg-zinc-100 text-zinc-600"
-                              }`}
-                            >
+                            <span className="hidden sm:inline">
                               {MATCH_TYPE_LABEL[m.match_type as keyof typeof MATCH_TYPE_LABEL] ?? m.match_type}
                             </span>
-                          </div>
-                          <div className="flex min-w-0 items-center pl-14 sm:contents sm:pl-0">
-                            <span className="min-w-0 flex-1 truncate whitespace-nowrap text-right text-zinc-800">
-                              {team1.map((mp, i) => (
-                                <span key={mp.room_participant?.id ?? i}>
-                                  {i > 0 && " · "}
-                                  <span
-                                    className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
-                                  >
-                                    {mp.room_participant ? participantName(mp.room_participant) : ""}
-                                  </span>
+                          </span>
+                          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-right text-zinc-800">
+                            {team1.map((mp, i) => (
+                              <span key={mp.room_participant?.id ?? i}>
+                                {i > 0 && " · "}
+                                <span
+                                  className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
+                                >
+                                  {mp.room_participant ? participantName(mp.room_participant) : ""}
                                 </span>
-                              ))}
-                            </span>
-                            <span className="mx-2 shrink-0 text-xs text-zinc-400">
-                              {isAdmin ? <VsOrPairScore t1sum={t1sum} t2sum={t2sum} /> : "vs"}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate whitespace-nowrap text-zinc-800">
-                              {team2.map((mp, i) => (
-                                <span key={mp.room_participant?.id ?? i}>
-                                  {i > 0 && " · "}
-                                  <span
-                                    className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
-                                  >
-                                    {mp.room_participant ? participantName(mp.room_participant) : ""}
-                                  </span>
+                              </span>
+                            ))}
+                          </span>
+                          <span className="mx-1 shrink-0 text-[10px] text-zinc-400 sm:mx-2 sm:text-xs">
+                            {isAdmin ? <VsOrPairScore t1sum={t1sum} t2sum={t2sum} /> : "vs"}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-zinc-800">
+                            {team2.map((mp, i) => (
+                              <span key={mp.room_participant?.id ?? i}>
+                                {i > 0 && " · "}
+                                <span
+                                  className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
+                                >
+                                  {mp.room_participant ? participantName(mp.room_participant) : ""}
                                 </span>
-                              ))}
-                            </span>
-                          </div>
+                              </span>
+                            ))}
+                          </span>
                         </li>
                       );
                     })}
                   {wrapup && (
-                    <li className="flex items-center py-2 text-sm">
-                      <span className="w-14 shrink-0 text-zinc-400"></span>
-                      <span className="w-28 shrink-0 text-xs text-zinc-400">
+                    <li className="flex items-center gap-1.5 py-2 text-xs sm:gap-2 sm:text-sm">
+                      <span className="w-8 shrink-0 text-zinc-400 sm:w-14"></span>
+                      <span className="w-20 shrink-0 text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
                         {wrapup.start}~{wrapup.end}
                       </span>
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-center text-xs text-amber-800">
+                      <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-center text-[11px] text-amber-800 sm:px-2 sm:text-xs">
                         대회 마무리 (시상식 등)
                       </span>
                     </li>

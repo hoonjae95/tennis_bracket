@@ -15,8 +15,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://tennis-bracket-bay.vercel.app"),
   title: "L.P.T 대진표",
   description: "Let's Play Tennis 클럽 대진표 자동 생성 서비스",
+  openGraph: {
+    title: "L.P.T 대진표",
+    description: "Let's Play Tennis 클럽 대진표 자동 생성 서비스",
+    images: ["/icon.png"],
+  },
+  twitter: {
+    card: "summary",
+    title: "L.P.T 대진표",
+    description: "Let's Play Tennis 클럽 대진표 자동 생성 서비스",
+    images: ["/icon.png"],
+  },
 };
 
 export const viewport: Viewport = {

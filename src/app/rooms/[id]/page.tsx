@@ -17,6 +17,7 @@ import {
   type Gender,
   type MatchType,
 } from "@/lib/bracket/types";
+import { PairScoreVisibilityProvider, VsOrPairScore } from "@/components/bracket/pair-score-visibility";
 
 export default async function RoomDetailPage({
   params,
@@ -116,7 +117,7 @@ export default async function RoomDetailPage({
           아직 대진표가 생성되지 않았습니다.
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <BracketBody isAdmin={isAdmin}>
           {(restingByRound.length > 0 || (participants && participants.length > 0)) && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {participants && participants.length > 0 && (
@@ -277,7 +278,7 @@ export default async function RoomDetailPage({
                               ))}
                             </span>
                             <span className="mx-2 shrink-0 text-xs text-zinc-400">
-                              {isAdmin ? `페어 점수 ${t1sum} : ${t2sum}` : "vs"}
+                              {isAdmin ? <VsOrPairScore t1sum={t1sum} t2sum={t2sum} /> : "vs"}
                             </span>
                             <span className="min-w-0 flex-1 truncate whitespace-nowrap text-zinc-800">
                               {team2.map((mp, i) => (
@@ -308,8 +309,19 @@ export default async function RoomDetailPage({
               </div>
             );
           })}
-        </div>
+        </BracketBody>
       )}
     </div>
+  );
+}
+
+function BracketBody({ isAdmin, children }: { isAdmin: boolean; children: React.ReactNode }) {
+  if (!isAdmin) {
+    return <div className="flex flex-col gap-4">{children}</div>;
+  }
+  return (
+    <PairScoreVisibilityProvider>
+      <div className="flex flex-col gap-4">{children}</div>
+    </PairScoreVisibilityProvider>
   );
 }

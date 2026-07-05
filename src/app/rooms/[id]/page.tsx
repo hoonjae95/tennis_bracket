@@ -233,9 +233,9 @@ export default async function RoomDetailPage({
                 <h2 className="mb-2 font-semibold text-zinc-800">코트 {court.name}</h2>
                 <ul className="flex flex-col divide-y divide-zinc-100">
                   {warmup && (
-                    <li className="flex items-center gap-1.5 py-2 text-xs sm:gap-2 sm:text-sm">
-                      <span className="w-8 shrink-0 text-zinc-400 sm:w-14"></span>
-                      <span className="w-20 shrink-0 text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
+                    <li className="flex items-center gap-0.5 py-2 text-xs sm:gap-2 sm:text-sm">
+                      <span className="w-5 shrink-0 text-zinc-400 sm:w-14"></span>
+                      <span className="w-[4.7rem] shrink-0 whitespace-nowrap text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
                         {warmup.start}~{warmup.end}
                       </span>
                       <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-center text-[11px] text-zinc-500 sm:px-2 sm:text-xs">
@@ -259,9 +259,9 @@ export default async function RoomDetailPage({
 
                       if (row.kind === "free") {
                         return (
-                          <li key={`free-${row.roundNo}`} className="flex items-center gap-1.5 py-2 text-xs sm:gap-2 sm:text-sm">
-                            <span className="w-8 shrink-0 text-zinc-400 sm:w-14">R{row.roundNo}</span>
-                            <span className="w-20 shrink-0 text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
+                          <li key={`free-${row.roundNo}`} className="flex items-center gap-0.5 py-2 text-xs sm:gap-2 sm:text-sm">
+                            <span className="w-5 shrink-0 text-[11px] text-zinc-400 sm:w-14 sm:text-sm">R{row.roundNo}</span>
+                            <span className="w-[4.7rem] shrink-0 whitespace-nowrap text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
                               {start}~{end}
                             </span>
                             <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-center text-[11px] text-zinc-500 sm:px-2 sm:text-xs">
@@ -282,14 +282,13 @@ export default async function RoomDetailPage({
                       const t2sum = team2.reduce((s, mp) => s + GRADE_SCORE[effectiveGrade(mp)], 0);
 
                       return (
-                        <li key={m.id} className="flex items-center gap-1 py-2 text-xs sm:gap-2 sm:text-sm">
-                          <span className="w-6 shrink-0 text-zinc-400 sm:w-14">R{m.round_no}</span>
-                          <span className="hidden shrink-0 text-xs text-zinc-400 sm:inline sm:w-28">
+                        <li key={m.id} className="flex items-center gap-0.5 py-2 text-xs sm:gap-2 sm:text-sm">
+                          <span className="w-5 shrink-0 text-[11px] text-zinc-400 sm:w-14 sm:text-sm">R{m.round_no}</span>
+                          <span className="w-[4.7rem] shrink-0 whitespace-nowrap text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
                             {start}~{end}
                           </span>
-                          <span className="w-11 shrink-0 text-[10px] text-zinc-400 sm:hidden">{end}</span>
                           <span
-                            className={`w-8 shrink-0 whitespace-nowrap rounded-full px-1 py-0.5 text-center text-[10px] sm:w-20 sm:px-2 sm:text-xs ${
+                            className={`shrink-0 whitespace-nowrap rounded-full px-1 py-0.5 text-center text-[10px] sm:w-20 sm:px-2 sm:text-xs ${
                               MATCH_TYPE_BADGE[m.match_type as MatchType] ?? "bg-zinc-100 text-zinc-600"
                             }`}
                           >
@@ -312,7 +311,7 @@ export default async function RoomDetailPage({
                               </span>
                             ))}
                           </span>
-                          <span className="mx-1 shrink-0 text-[10px] text-zinc-400 sm:mx-2 sm:text-xs">
+                          <span className="mx-0.5 shrink-0 text-[10px] text-zinc-400 sm:mx-2 sm:text-xs">
                             {isAdmin ? <VsOrPairScore t1sum={t1sum} t2sum={t2sum} /> : "vs"}
                           </span>
                           <span className="min-w-0 flex-1 truncate whitespace-nowrap text-zinc-800">
@@ -331,9 +330,9 @@ export default async function RoomDetailPage({
                       );
                     })}
                   {wrapup && (
-                    <li className="flex items-center gap-1.5 py-2 text-xs sm:gap-2 sm:text-sm">
-                      <span className="w-8 shrink-0 text-zinc-400 sm:w-14"></span>
-                      <span className="w-20 shrink-0 text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
+                    <li className="flex items-center gap-0.5 py-2 text-xs sm:gap-2 sm:text-sm">
+                      <span className="w-5 shrink-0 text-zinc-400 sm:w-14"></span>
+                      <span className="w-[4.7rem] shrink-0 whitespace-nowrap text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
                         {wrapup.start}~{wrapup.end}
                       </span>
                       <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-center text-[11px] text-amber-800 sm:px-2 sm:text-xs">

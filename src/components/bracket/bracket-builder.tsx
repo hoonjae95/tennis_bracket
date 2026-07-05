@@ -463,16 +463,15 @@ function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: stri
   const t1sum = match.team1.reduce((s, p) => s + GRADE_SCORE[p.grade], 0);
   const t2sum = match.team2.reduce((s, p) => s + GRADE_SCORE[p.grade], 0);
 
-  const shortTimeLabel = timeLabel.split("~")[1] ?? timeLabel;
-
   return (
     <li className="flex flex-col py-2 text-xs sm:text-sm">
-      <div className="flex items-center gap-1 sm:gap-2">
-        <span className="w-6 shrink-0 text-zinc-400 sm:w-16">R{match.roundNo}</span>
-        <span className="hidden shrink-0 text-xs text-zinc-400 sm:inline sm:w-28">{timeLabel}</span>
-        <span className="w-11 shrink-0 text-[10px] text-zinc-400 sm:hidden">{shortTimeLabel}</span>
+      <div className="flex items-center gap-0.5 sm:gap-2">
+        <span className="w-5 shrink-0 text-[11px] text-zinc-400 sm:w-16 sm:text-sm">R{match.roundNo}</span>
+        <span className="w-[4.7rem] shrink-0 whitespace-nowrap text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
+          {timeLabel}
+        </span>
         <span
-          className={`w-8 shrink-0 whitespace-nowrap rounded-full px-1 py-0.5 text-center text-[10px] sm:w-20 sm:px-2 sm:text-xs ${MATCH_TYPE_BADGE[match.matchType]}`}
+          className={`shrink-0 whitespace-nowrap rounded-full px-1 py-0.5 text-center text-[10px] sm:w-20 sm:px-2 sm:text-xs ${MATCH_TYPE_BADGE[match.matchType]}`}
         >
           <span className="sm:hidden">{MATCH_TYPE_LABEL_SHORT[match.matchType]}</span>
           <span className="hidden sm:inline">{MATCH_TYPE_LABEL[match.matchType]}</span>
@@ -486,7 +485,7 @@ function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: stri
             </span>
           ))}
         </span>
-        <span className="mx-1 shrink-0 text-[10px] text-zinc-400 sm:mx-2 sm:text-xs">
+        <span className="mx-0.5 shrink-0 text-[10px] text-zinc-400 sm:mx-2 sm:text-xs">
           <span className="sm:hidden">
             {t1sum}:{t2sum}
           </span>
@@ -521,12 +520,12 @@ function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: stri
 }
 
 function FreePracticeRow({ roundNo, timeLabel }: { roundNo: number; timeLabel: string }) {
-  const shortTimeLabel = timeLabel.split("~")[1] ?? timeLabel;
   return (
-    <li className="flex items-center gap-1 py-2 text-xs sm:gap-2 sm:text-sm">
-      <span className="w-6 shrink-0 text-zinc-400 sm:w-16">R{roundNo}</span>
-      <span className="hidden shrink-0 text-xs text-zinc-400 sm:inline sm:w-28">{timeLabel}</span>
-      <span className="w-11 shrink-0 text-[10px] text-zinc-400 sm:hidden">{shortTimeLabel}</span>
+    <li className="flex items-center gap-0.5 py-2 text-xs sm:gap-2 sm:text-sm">
+      <span className="w-5 shrink-0 text-[11px] text-zinc-400 sm:w-16 sm:text-sm">R{roundNo}</span>
+      <span className="w-[4.7rem] shrink-0 whitespace-nowrap text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
+        {timeLabel}
+      </span>
       <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-center text-[11px] text-zinc-500 sm:px-2 sm:text-xs">
         자유 랠리 연습
       </span>

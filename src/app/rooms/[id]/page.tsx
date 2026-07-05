@@ -20,6 +20,9 @@ import {
   type MatchType,
 } from "@/lib/bracket/types";
 import { PairScoreVisibilityProvider, VsOrPairScore } from "@/components/bracket/pair-score-visibility";
+import { BracketNotesVisibilityProvider, BracketNote } from "@/components/bracket/bracket-notes-visibility";
+import { computeConsecutivePlayNotes } from "@/lib/bracket/generate";
+import type { ConsecutivePlayNote } from "@/lib/bracket/types";
 
 type ParticipantLike = {
   guest_name: string | null;
@@ -105,6 +108,31 @@ export default async function RoomDetailPage({
       return { roundNo, resting };
     })
     .filter((r) => r.resting.length > 0);
+
+  // note는 DB에 저장되지 않으므로(생성 알고리즘의 부산물), 저장된 대진표 순서를 그대로
+  // 훑어서 실제 몇 연속 출전인지 다시 계산한다.
+  const notesForNoteCalc = (matches ?? []).map((m) => ({
+    id: m.id,
+    roundNo: m.round_no,
+    team1: m.match_players
+      .filter((mp) => mp.team === 1)
+      .map((mp) => ({
+        roomParticipantId: mp.room_participant?.id ?? "",
+        name: mp.room_participant ? participantName(mp.room_participant) : "",
+      })),
+    team2: m.match_players
+      .filter((mp) => mp.team === 2)
+      .map((mp) => ({
+        roomParticipantId: mp.room_participant?.id ?? "",
+        name: mp.room_participant ? participantName(mp.room_participant) : "",
+      })),
+  }));
+  const notesByMatchRef = computeConsecutivePlayNotes(notesForNoteCalc);
+  const noteByMatchId = new Map<string, ConsecutivePlayNote[]>();
+  for (const entry of notesForNoteCalc) {
+    const note = notesByMatchRef.get(entry);
+    if (note) noteByMatchId.set(entry.id, note);
+  }
 
   const slotsPerCourt = calcSlotsPerCourt({
     startTime: room.start_time,
@@ -281,51 +309,56 @@ export default async function RoomDetailPage({
                       const t1sum = team1.reduce((s, mp) => s + GRADE_SCORE[effectiveGrade(mp)], 0);
                       const t2sum = team2.reduce((s, mp) => s + GRADE_SCORE[effectiveGrade(mp)], 0);
 
+                      const note = noteByMatchId.get(m.id);
+
                       return (
-                        <li key={m.id} className="flex items-center gap-0.5 py-2 text-xs sm:gap-2 sm:text-sm">
-                          <span className="w-5 shrink-0 text-[11px] text-zinc-400 sm:w-14 sm:text-sm">R{m.round_no}</span>
-                          <span className="w-[4.7rem] shrink-0 whitespace-nowrap text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
-                            {start}~{end}
-                          </span>
-                          <span
-                            className={`shrink-0 whitespace-nowrap rounded-full px-1 py-0.5 text-center text-[10px] sm:w-20 sm:px-2 sm:text-xs ${
-                              MATCH_TYPE_BADGE[m.match_type as MatchType] ?? "bg-zinc-100 text-zinc-600"
-                            }`}
-                          >
-                            <span className="sm:hidden">
-                              {MATCH_TYPE_LABEL_SHORT[m.match_type as keyof typeof MATCH_TYPE_LABEL_SHORT] ?? m.match_type}
+                        <li key={m.id} className="flex flex-col py-2 text-xs sm:text-sm">
+                          <div className="flex items-center gap-0.5 sm:gap-2">
+                            <span className="w-5 shrink-0 text-[11px] text-zinc-400 sm:w-14 sm:text-sm">R{m.round_no}</span>
+                            <span className="w-[4.7rem] shrink-0 whitespace-nowrap text-[11px] text-zinc-400 sm:w-28 sm:text-xs">
+                              {start}~{end}
                             </span>
-                            <span className="hidden sm:inline">
-                              {MATCH_TYPE_LABEL[m.match_type as keyof typeof MATCH_TYPE_LABEL] ?? m.match_type}
+                            <span
+                              className={`shrink-0 whitespace-nowrap rounded-full px-1 py-0.5 text-center text-[10px] sm:w-20 sm:px-2 sm:text-xs ${
+                                MATCH_TYPE_BADGE[m.match_type as MatchType] ?? "bg-zinc-100 text-zinc-600"
+                              }`}
+                            >
+                              <span className="sm:hidden">
+                                {MATCH_TYPE_LABEL_SHORT[m.match_type as keyof typeof MATCH_TYPE_LABEL_SHORT] ?? m.match_type}
+                              </span>
+                              <span className="hidden sm:inline">
+                                {MATCH_TYPE_LABEL[m.match_type as keyof typeof MATCH_TYPE_LABEL] ?? m.match_type}
+                              </span>
                             </span>
-                          </span>
-                          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-right text-zinc-800">
-                            {team1.map((mp, i) => (
-                              <span key={mp.room_participant?.id ?? i}>
-                                {i > 0 && " · "}
-                                <span
-                                  className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
-                                >
-                                  {mp.room_participant ? participantName(mp.room_participant) : ""}
+                            <span className="min-w-0 flex-1 truncate whitespace-nowrap text-right text-zinc-800">
+                              {team1.map((mp, i) => (
+                                <span key={mp.room_participant?.id ?? i}>
+                                  {i > 0 && " · "}
+                                  <span
+                                    className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
+                                  >
+                                    {mp.room_participant ? participantName(mp.room_participant) : ""}
+                                  </span>
                                 </span>
-                              </span>
-                            ))}
-                          </span>
-                          <span className="mx-0.5 shrink-0 text-[10px] text-zinc-400 sm:mx-2 sm:text-xs">
-                            {isAdmin ? <VsOrPairScore t1sum={t1sum} t2sum={t2sum} /> : "vs"}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate whitespace-nowrap text-zinc-800">
-                            {team2.map((mp, i) => (
-                              <span key={mp.room_participant?.id ?? i}>
-                                {i > 0 && " · "}
-                                <span
-                                  className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
-                                >
-                                  {mp.room_participant ? participantName(mp.room_participant) : ""}
+                              ))}
+                            </span>
+                            <span className="mx-0.5 shrink-0 text-[10px] text-zinc-400 sm:mx-2 sm:text-xs">
+                              {isAdmin ? <VsOrPairScore t1sum={t1sum} t2sum={t2sum} /> : "vs"}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate whitespace-nowrap text-zinc-800">
+                              {team2.map((mp, i) => (
+                                <span key={mp.room_participant?.id ?? i}>
+                                  {i > 0 && " · "}
+                                  <span
+                                    className={GENDER_TEXT_COLOR[mp.room_participant ? participantGender(mp.room_participant) : "male"]}
+                                  >
+                                    {mp.room_participant ? participantName(mp.room_participant) : ""}
+                                  </span>
                                 </span>
-                              </span>
-                            ))}
-                          </span>
+                              ))}
+                            </span>
+                          </div>
+                          {note && note.length > 0 && <BracketNote note={note} />}
                         </li>
                       );
                     })}
@@ -360,12 +393,10 @@ export default async function RoomDetailPage({
 }
 
 function BracketBody({ isAdmin, children }: { isAdmin: boolean; children: React.ReactNode }) {
+  const body = <div className="flex flex-col gap-4">{children}</div>;
+  const withNotes = <BracketNotesVisibilityProvider>{body}</BracketNotesVisibilityProvider>;
   if (!isAdmin) {
-    return <div className="flex flex-col gap-4">{children}</div>;
+    return withNotes;
   }
-  return (
-    <PairScoreVisibilityProvider>
-      <div className="flex flex-col gap-4">{children}</div>
-    </PairScoreVisibilityProvider>
-  );
+  return <PairScoreVisibilityProvider>{withNotes}</PairScoreVisibilityProvider>;
 }

@@ -16,7 +16,7 @@ import {
 const GENDER_FREE_FALLBACK_TYPE: MatchType = "mixed_any_doubles";
 
 const MAX_BALANCE_DIFF = 2; // 팀 간 등급 점수 합 차이 허용 한도
-const MAX_CONSECUTIVE_PLAY = 2; // 연속 출전 최대 (3연속 금지)
+export const MAX_CONSECUTIVE_PLAY = 2; // 연속 출전 최대 (3연속 금지)
 const MAX_CONSECUTIVE_REST = 2; // 연속 휴식 최대 (3연속 금지)
 
 type PlayerState = {
@@ -377,4 +377,59 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
 
   void stateById;
   return { matches, freePracticeSlots, restingPlayersByRound, playerStats, warnings };
+}
+
+// 저장된(=이미 확정된) 대진표에는 note가 저장되지 않으므로, 공개 페이지 렌더링 시점에
+// 라운드 순서대로 다시 훑어 몇 연속 출전인지 재계산한다. 실제 3연속 이상인 라운드만 표시.
+export function computeConsecutivePlayNotes<
+  M extends { roundNo: number; team1: { roomParticipantId: string; name: string }[]; team2: { roomParticipantId: string; name: string }[] }
+>(matches: M[]): Map<M, ConsecutivePlayNote[]> {
+  const notesByMatch = new Map<M, ConsecutivePlayNote[]>();
+  const rounds = Array.from(new Set(matches.map((m) => m.roundNo))).sort((a, b) => a - b);
+  const consecutiveById = new Map<string, number>();
+  const nameById = new Map<string, string>();
+
+  for (const roundNo of rounds) {
+    const roundMatches = matches.filter((m) => m.roundNo === roundNo);
+    const playingThisRound = new Set<string>();
+
+    for (const m of roundMatches) {
+      for (const p of [...m.team1, ...m.team2]) {
+        playingThisRound.add(p.roomParticipantId);
+        nameById.set(p.roomParticipantId, p.name);
+      }
+    }
+
+    for (const m of roundMatches) {
+      const forced: { id: string; count: number }[] = [];
+      for (const p of [...m.team1, ...m.team2]) {
+        const prevStreak = consecutiveById.get(p.roomParticipantId) ?? 0;
+        const streak = prevStreak + 1;
+        if (streak > MAX_CONSECUTIVE_PLAY) {
+          forced.push({ id: p.roomParticipantId, count: streak });
+        }
+      }
+      if (forced.length > 0) {
+        const countByName = new Map<number, string[]>();
+        for (const f of forced) {
+          const names = countByName.get(f.count) ?? [];
+          names.push(nameById.get(f.id) ?? "");
+          countByName.set(f.count, names);
+        }
+        const note: ConsecutivePlayNote[] = Array.from(countByName.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([consecutiveCount, names]) => ({ names, consecutiveCount }));
+        notesByMatch.set(m, note);
+      }
+    }
+
+    for (const id of consecutiveById.keys()) {
+      if (!playingThisRound.has(id)) consecutiveById.set(id, 0);
+    }
+    for (const id of playingThisRound) {
+      consecutiveById.set(id, (consecutiveById.get(id) ?? 0) + 1);
+    }
+  }
+
+  return notesByMatch;
 }

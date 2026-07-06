@@ -71,6 +71,7 @@ export function BracketBuilder({
     wrapupMinutes: number;
     matchTypes: MatchType[];
     fairnessMode: FairnessMode;
+    maxGamesPerPlayer: number | null;
   };
   existingMatches: ExistingMatch[];
 }) {
@@ -155,6 +156,7 @@ export function BracketBuilder({
       slotsPerCourt: slots,
       enabledMatchTypes: Array.from(types),
       fairnessMode: room.fairnessMode,
+      ...(room.maxGamesPerPlayer != null ? { maxGamesPerPlayer: room.maxGamesPerPlayer } : {}),
     });
     setGenerated(result.matches);
     setFreePracticeSlots(result.freePracticeSlots);

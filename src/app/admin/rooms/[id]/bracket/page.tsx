@@ -59,6 +59,7 @@ export default async function RoomBracketPage({
           wrapupMinutes: room.wrapup_minutes,
           matchTypes: room.match_types,
           fairnessMode: room.fairness_mode,
+          maxGamesPerPlayer: room.max_games_per_player ?? null,
         }}
         existingMatches={existingMatches ?? []}
       />

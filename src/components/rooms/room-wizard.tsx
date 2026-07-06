@@ -60,6 +60,7 @@ export type RoomWizardInitialData = {
   wrapupMinutes: number;
   matchTypes: MatchType[];
   fairnessMode: FairnessMode;
+  maxGamesPerPlayer: number | null;
   participantMemberIds: string[];
   gradeOverrides: Record<string, Grade | null>;
   guests: GuestParticipantInput[];
@@ -91,6 +92,7 @@ export function RoomWizard({
   );
   const [courtType, setCourtType] = useState<CourtType>(initialData?.courtType ?? "hard_court");
   const [fairnessMode, setFairnessMode] = useState<FairnessMode>(initialData?.fairnessMode ?? "normal");
+  const [maxGamesPerPlayer, setMaxGamesPerPlayer] = useState<number | null>(initialData?.maxGamesPerPlayer ?? null);
 
   // Step 2 state
   const [gamesPerSet, setGamesPerSetState] = useState(initialData?.gamesPerSet ?? 5);
@@ -289,6 +291,7 @@ export function RoomWizard({
         courtType,
         matchTypes: Array.from(effectiveMatchTypes),
         fairnessMode,
+        maxGamesPerPlayer: fairnessMode === "tournament" ? maxGamesPerPlayer : null,
         participantMemberIds: Array.from(selectedMemberIds),
         gradeOverrides,
         guests,
@@ -617,6 +620,40 @@ export function RoomWizard({
               </div>
               <p className="mt-1 text-xs text-zinc-400">
                 종료 시간 전에 시상식 등을 위한 시간을 비워둡니다. 이 시간만큼 경기가 일찍 종료됩니다.
+              </p>
+            </div>
+          )}
+
+          {fairnessMode === "tournament" && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">
+                1인당 최대 경기 수
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  placeholder="제한 없음"
+                  value={maxGamesPerPlayer ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setMaxGamesPerPlayer(v === "" ? null : Math.max(1, parseInt(v, 10)));
+                  }}
+                  className="w-28 rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+                />
+                {maxGamesPerPlayer !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setMaxGamesPerPlayer(null)}
+                    className="text-xs text-zinc-400 hover:text-zinc-600"
+                  >
+                    제한 해제
+                  </button>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-zinc-400">
+                설정하면 해당 경기 수를 채운 선수는 이후 대진에서 제외됩니다. 남은 코트/시간은 관리자가 자유롭게 활용하세요.
               </p>
             </div>
           )}

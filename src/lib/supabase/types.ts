@@ -246,6 +246,7 @@ export type Database = {
           games_per_set: number
           id: string
           is_closed: boolean
+          max_games_per_player: number | null
           is_indoor: boolean
           location: string
           match_types: Database["public"]["Enums"]["match_type"][]
@@ -269,6 +270,7 @@ export type Database = {
           is_closed?: boolean
           is_indoor?: boolean
           location: string
+          max_games_per_player?: number | null
           match_types?: Database["public"]["Enums"]["match_type"][]
           minutes_per_match?: number
           start_time: string
@@ -290,6 +292,7 @@ export type Database = {
           is_closed?: boolean
           is_indoor?: boolean
           location?: string
+          max_games_per_player?: number | null
           match_types?: Database["public"]["Enums"]["match_type"][]
           minutes_per_match?: number
           start_time?: string

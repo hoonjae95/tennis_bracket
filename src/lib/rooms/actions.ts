@@ -39,6 +39,7 @@ export type CreateRoomInput = {
   courtType: CourtType;
   matchTypes: MatchType[];
   fairnessMode: FairnessMode;
+  maxGamesPerPlayer: number | null;
   participantMemberIds: string[];
   gradeOverrides: Record<string, Grade | null>;
   guests: GuestParticipantInput[];
@@ -93,6 +94,7 @@ export async function createRoom(input: CreateRoomInput): Promise<CreateRoomResu
       wrapup_minutes: input.wrapupMinutes,
       match_types: input.matchTypes,
       fairness_mode: input.fairnessMode,
+      max_games_per_player: input.maxGamesPerPlayer,
       status: "ready",
     })
     .select("id")
@@ -248,6 +250,7 @@ export async function updateRoom(input: UpdateRoomInput): Promise<UpdateRoomResu
       wrapup_minutes: input.wrapupMinutes,
       match_types: input.matchTypes,
       fairness_mode: input.fairnessMode,
+      max_games_per_player: input.maxGamesPerPlayer,
       ...(bracketReset ? { status: "ready" as const } : {}),
     })
     .eq("id", input.roomId);

@@ -41,6 +41,7 @@ export type BracketGenerationInput = {
   slotsPerCourt: number;
   enabledMatchTypes: MatchType[];
   fairnessMode?: FairnessMode; // 기본값 "normal"
+  maxGamesPerPlayer?: number; // 대회 모드 전용: 1인당 경기 수 제한
 };
 
 // 참가 인원이 부족해 특정 라운드에 경기를 배정할 수 없는 코트: 자유 랠리 연습으로 안내

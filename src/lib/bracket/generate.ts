@@ -64,13 +64,11 @@ function forcedMustPlay(states: PlayerState[], fairnessMode: FairnessMode): Set<
   return ids;
 }
 
-function forcedMustRest(states: PlayerState[], fairnessMode: FairnessMode): Set<string> {
-  // 대회 모드: 경기수 균등을 위해 3연속까지 허용 (노트는 여전히 2연속 초과부터 표시)
-  // 일반 모드: 2연속 후 강제 휴식
-  const limit = fairnessMode === "tournament" ? MAX_CONSECUTIVE_PLAY + 1 : MAX_CONSECUTIVE_PLAY;
+function forcedMustRest(states: PlayerState[]): Set<string> {
+  // 2연속 출전 후 강제 휴식
   return new Set(
     states
-      .filter((s) => s.consecutivePlay >= limit)
+      .filter((s) => s.consecutivePlay >= MAX_CONSECUTIVE_PLAY)
       .map((s) => s.player.roomParticipantId)
   );
 }
@@ -294,7 +292,7 @@ function planMatchTypeSchedule(
 }
 
 export function generateBracket(input: BracketGenerationInput): BracketGenerationResult {
-  const { players, courtCount, slotsPerCourt, enabledMatchTypes, fairnessMode = "normal" } = input;
+  const { players, courtCount, slotsPerCourt, enabledMatchTypes, fairnessMode = "normal", maxGamesPerPlayer } = input;
   const warnings: string[] = [];
 
   if (enabledMatchTypes.length === 0) {
@@ -355,12 +353,20 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
       }
 
       const mustPlay = forcedMustPlay(states, fairnessMode);
-      const mustRest = forcedMustRest(states, fairnessMode);
+      const mustRest = forcedMustRest(states);
 
       const notPlayingYet = (s: PlayerState) => !playingThisRound.has(s.player.roomParticipantId);
+      // 쿼터 찬 선수: 이후 모든 라운드에서 완전 제외
+      const quotaDone = maxGamesPerPlayer != null
+        ? new Set(states.filter((s) => s.gamesPlayed >= maxGamesPerPlayer).map((s) => s.player.roomParticipantId))
+        : new Set<string>();
 
-      // pool = not already playing this round, not forced to rest
-      const availablePool = states.filter((s) => notPlayingYet(s) && !mustRest.has(s.player.roomParticipantId));
+      // pool = 이번 라운드 미배정 & 강제휴식 아님 & 쿼터 미달성
+      const availablePool = states.filter((s) =>
+        notPlayingYet(s) &&
+        !mustRest.has(s.player.roomParticipantId) &&
+        !quotaDone.has(s.player.roomParticipantId)
+      );
 
       let picked: { type: MatchType; team1: PlayerState[]; team2: PlayerState[] } | null = null;
 
@@ -384,8 +390,21 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
       // 그냥 포기하지 않고, 3연속 출전 제한을 풀어서라도 경기를 배정한다.
       // 대신 어떤 선수가 그 제약 때문에 강행 배정됐는지, 실제 몇 연속째인지 비고로 남긴다.
       let forced: PlayerState[] = [];
+
+      // 대회 모드: 계획된 타입을 포기하기 전에 relaxedPool로 한 번 더 시도
+      // (mustRest 때문에 availablePool 실패 → 다른 타입으로 대체되는 폴백 버그 방지)
+      if (plannedType && picked?.type !== plannedType) {
+        const relaxedPool = states.filter((s) => notPlayingYet(s) && !quotaDone.has(s.player.roomParticipantId));
+        const eligible = eligiblePlayersFor(plannedType, relaxedPool);
+        const built = buildMatch(plannedType, eligible, mustPlay);
+        if (built) {
+          picked = { type: plannedType, ...built };
+          forced = [...built.team1, ...built.team2].filter((s) => mustRest.has(s.player.roomParticipantId));
+        }
+      }
+
       if (!picked) {
-        const relaxedPool = states.filter(notPlayingYet);
+        const relaxedPool = states.filter((s) => notPlayingYet(s) && !quotaDone.has(s.player.roomParticipantId));
         for (const type of orderedTypes) {
           const eligible = eligiblePlayersFor(type, relaxedPool);
           const built = buildMatch(type, eligible, mustPlay);
@@ -469,21 +488,30 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
     states.map((s) => [s.player.roomParticipantId, { gamesPlayed: s.gamesPlayed }])
   );
 
-  // 성별 그룹별로 편차를 따로 체크 (남복/여복만 켠 경우 등 그룹 인원 차이로 인한
-  // 자연스러운 총량 차이를 편차로 오인하지 않도록)
-  const allowedDiff = fairnessMode === "tournament" ? 0 : 1;
-  for (const gender of ["male", "female"] as const) {
-    const group = states.filter((s) => s.player.gender === gender);
-    if (group.length === 0) continue;
-    const counts = group.map((s) => s.gamesPlayed);
-    const max = Math.max(...counts);
-    const min = Math.min(...counts);
-    if (max - min > allowedDiff) {
+  // 경기수 편차 경고
+  if (maxGamesPerPlayer != null) {
+    // 쿼터 모드: 목표치에 못 미친 선수만 경고
+    const shortfall = states.filter((s) => s.gamesPlayed < maxGamesPerPlayer);
+    if (shortfall.length > 0) {
       warnings.push(
-        `${gender === "male" ? "남자" : "여자"} 선수 간 경기 수 편차가 ${max - min}게임입니다.${
-          fairnessMode === "tournament" ? " (대회 모드: 혼복 등 성별 혼합 경기로 인해 완전 균등이 어려울 수 있습니다.)" : ""
-        }`
+        `목표 ${maxGamesPerPlayer}경기에 못 미친 선수: ${shortfall.map((s) => `${s.player.name}(${s.gamesPlayed}경기)`).join(", ")}`
       );
+    }
+  } else {
+    // 성별 그룹별로 편차를 따로 체크 (남복/여복만 켠 경우 등 그룹 인원 차이로 인한
+    // 자연스러운 총량 차이를 편차로 오인하지 않도록)
+    const allowedDiff = fairnessMode === "tournament" ? 0 : 1;
+    for (const gender of ["male", "female"] as const) {
+      const group = states.filter((s) => s.player.gender === gender);
+      if (group.length === 0) continue;
+      const counts = group.map((s) => s.gamesPlayed);
+      const max = Math.max(...counts);
+      const min = Math.min(...counts);
+      if (max - min > allowedDiff) {
+        warnings.push(
+          `${gender === "male" ? "남자" : "여자"} 선수 간 경기 수 편차가 ${max - min}게임입니다.`
+        );
+      }
     }
   }
 

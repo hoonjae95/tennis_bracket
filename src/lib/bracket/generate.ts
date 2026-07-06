@@ -194,6 +194,103 @@ function splitIntoTeams(
   return results;
 }
 
+/**
+ * 대회 모드 전용: 라운드×코트 슬롯마다 매치타입을 미리 배정.
+ * 남자/여자 코트 수를 선제 계획해 성별별 총 경기 슬롯이 target_games × 인원에 맞도록 보장.
+ */
+function planMatchTypeSchedule(
+  players: BracketPlayer[],
+  activeCourtsCount: number,
+  slotsPerCourt: number,
+  enabledMatchTypes: MatchType[],
+): MatchType[][] {
+  const numMale = players.filter((p) => p.gender === "male").length;
+  const numFemale = players.filter((p) => p.gender === "female").length;
+
+  const maleTypes = enabledMatchTypes.filter(
+    (t) => t === "mens_doubles" || t === "mens_singles"
+  );
+  const femaleTypes = enabledMatchTypes.filter(
+    (t) => t === "womens_doubles" || t === "womens_singles"
+  );
+  const mixedTypes = enabledMatchTypes.filter(
+    (t) => t === "mixed_doubles" || t === "mixed_any_doubles"
+  );
+
+  // 남/여 전용 타입이 모두 있어야 계획이 의미 있음
+  if (maleTypes.length === 0 || femaleTypes.length === 0) {
+    return Array.from({ length: slotsPerCourt }, () =>
+      Array.from({ length: activeCourtsCount }, () =>
+        enabledMatchTypes[Math.floor(Math.random() * enabledMatchTypes.length)]
+      )
+    );
+  }
+
+  const totalSlots = activeCourtsCount * slotsPerCourt;
+  const ppMale = playersPerTeam(maleTypes[0]) * 2;
+  const ppFemale = playersPerTeam(femaleTypes[0]) * 2;
+
+  // target_games × (nm/ppMale + nf/ppFemale) = totalSlots 를 풀어 최적 코트 수 산출
+  const denominator = numMale / ppMale + numFemale / ppFemale;
+  let maleCourtsTotal: number;
+  if (denominator === 0) {
+    maleCourtsTotal = Math.floor(totalSlots / 2);
+  } else {
+    const targetGames = totalSlots / denominator;
+    maleCourtsTotal = Math.round((numMale * targetGames) / ppMale);
+  }
+  maleCourtsTotal = Math.max(0, Math.min(totalSlots, maleCourtsTotal));
+  const femaleCourtsTotal = totalSlots - maleCourtsTotal;
+
+  // 라운드별로 비례 배분 (Bresenham-style)
+  const plan: MatchType[][] = [];
+  let maleRemaining = maleCourtsTotal;
+  let femaleRemaining = femaleCourtsTotal;
+
+  for (let r = 0; r < slotsPerCourt; r++) {
+    const totalRemaining = maleRemaining + femaleRemaining;
+    let maleThisRound: number;
+    if (totalRemaining === 0) {
+      maleThisRound = 0;
+    } else {
+      maleThisRound = Math.round(
+        (maleRemaining * activeCourtsCount) / totalRemaining
+      );
+      maleThisRound = Math.max(
+        0,
+        Math.min(activeCourtsCount, maleThisRound, maleRemaining)
+      );
+    }
+    const femaleThisRound = Math.min(
+      activeCourtsCount - maleThisRound,
+      femaleRemaining
+    );
+
+    const maleType = maleTypes[Math.floor(Math.random() * maleTypes.length)];
+    const femaleType = femaleTypes[Math.floor(Math.random() * femaleTypes.length)];
+    const roundPlan: MatchType[] = [
+      ...Array<MatchType>(maleThisRound).fill(maleType),
+      ...Array<MatchType>(femaleThisRound).fill(femaleType),
+    ];
+    // 슬롯이 남으면(수학이 안 맞는 edge case) 혼복 또는 첫 번째 타입으로 채움
+    while (roundPlan.length < activeCourtsCount) {
+      roundPlan.push(mixedTypes.length > 0 ? mixedTypes[0] : enabledMatchTypes[0]);
+    }
+
+    // 라운드 내 코트 순서를 섞어 특정 코트가 항상 같은 성별이 되는 걸 방지
+    for (let i = roundPlan.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [roundPlan[i], roundPlan[j]] = [roundPlan[j], roundPlan[i]];
+    }
+
+    plan.push(roundPlan);
+    maleRemaining -= maleThisRound;
+    femaleRemaining -= femaleThisRound;
+  }
+
+  return plan;
+}
+
 export function generateBracket(input: BracketGenerationInput): BracketGenerationResult {
   const { players, courtCount, slotsPerCourt, enabledMatchTypes, fairnessMode = "normal" } = input;
   const warnings: string[] = [];
@@ -227,6 +324,12 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
     consecutiveRest: 0,
   }));
 
+  // 대회 모드: 성별별 코트 수를 미리 계획해 경기 슬롯 총합을 보장
+  const matchTypePlan: MatchType[][] | null =
+    fairnessMode === "tournament"
+      ? planMatchTypeSchedule(players, activeCourtsCount, slotsPerCourt, enabledMatchTypes)
+      : null;
+
   const stateById = new Map(states.map((s) => [s.player.roomParticipantId, s]));
   const matches: GeneratedMatch[] = [];
   const freePracticeSlots: FreePracticeSlot[] = [];
@@ -240,6 +343,8 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
     for (let k = 0; k < freePracticeCourtsCount; k++) {
       freeCourtsThisRound.add((round - 1 + k) % courtCount);
     }
+
+    let activeCourt = 0; // matchTypePlan 인덱싱용 (자유 연습 코트 제외한 순번)
 
     for (let court = 0; court < courtCount; court++) {
       if (freeCourtsThisRound.has(court)) {
@@ -255,11 +360,16 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
       // pool = not already playing this round, not forced to rest
       const availablePool = states.filter((s) => notPlayingYet(s) && !mustRest.has(s.player.roomParticipantId));
 
-      // pick a match type: prefer one whose eligible pool (accounting for must-play backlog) is largest relative to need
       let picked: { type: MatchType; team1: PlayerState[]; team2: PlayerState[] } | null = null;
 
-      const shuffledTypes = [...enabledMatchTypes].sort(() => Math.random() - 0.5);
-      for (const type of shuffledTypes) {
+      // 대회 모드: 계획된 타입을 우선 시도, 그 외 타입은 폴백용으로만 사용
+      const plannedType = matchTypePlan?.[round - 1]?.[activeCourt];
+      const orderedTypes = plannedType
+        ? [plannedType, ...[...enabledMatchTypes].filter((t) => t !== plannedType).sort(() => Math.random() - 0.5)]
+        : [...enabledMatchTypes].sort(() => Math.random() - 0.5);
+      activeCourt++;
+
+      for (const type of orderedTypes) {
         const eligible = eligiblePlayersFor(type, availablePool);
         const built = buildMatch(type, eligible, mustPlay);
         if (built) {
@@ -274,7 +384,7 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
       let forced: PlayerState[] = [];
       if (!picked) {
         const relaxedPool = states.filter(notPlayingYet);
-        for (const type of shuffledTypes) {
+        for (const type of orderedTypes) {
           const eligible = eligiblePlayersFor(type, relaxedPool);
           const built = buildMatch(type, eligible, mustPlay);
           if (built) {

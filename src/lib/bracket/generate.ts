@@ -64,11 +64,13 @@ function forcedMustPlay(states: PlayerState[], fairnessMode: FairnessMode): Set<
   return ids;
 }
 
-function forcedMustRest(states: PlayerState[]): Set<string> {
-  // 3연속 출전 방지: 이미 2연속 뛴 사람은 이번 라운드에 반드시 쉬어야 함
+function forcedMustRest(states: PlayerState[], fairnessMode: FairnessMode): Set<string> {
+  // 대회 모드: 경기수 균등을 위해 3연속까지 허용 (노트는 여전히 2연속 초과부터 표시)
+  // 일반 모드: 2연속 후 강제 휴식
+  const limit = fairnessMode === "tournament" ? MAX_CONSECUTIVE_PLAY + 1 : MAX_CONSECUTIVE_PLAY;
   return new Set(
     states
-      .filter((s) => s.consecutivePlay >= MAX_CONSECUTIVE_PLAY)
+      .filter((s) => s.consecutivePlay >= limit)
       .map((s) => s.player.roomParticipantId)
   );
 }
@@ -353,7 +355,7 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
       }
 
       const mustPlay = forcedMustPlay(states, fairnessMode);
-      const mustRest = forcedMustRest(states);
+      const mustRest = forcedMustRest(states, fairnessMode);
 
       const notPlayingYet = (s: PlayerState) => !playingThisRound.has(s.player.roomParticipantId);
 

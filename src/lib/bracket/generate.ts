@@ -421,7 +421,7 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
       // 특정 성별이 부족해 선택된 매치타입으로는 대진을 못 만드는 경우:
       // 성별 무관 잡복식으로 자동 전환해서라도 코트를 채운다.
       if (!picked && !enabledMatchTypes.includes(GENDER_FREE_FALLBACK_TYPE)) {
-        const relaxedPool = states.filter(notPlayingYet);
+        const relaxedPool = states.filter((s) => notPlayingYet(s) && !quotaDone.has(s.player.roomParticipantId));
         const built =
           buildMatch(GENDER_FREE_FALLBACK_TYPE, availablePool, mustPlay) ??
           buildMatch(GENDER_FREE_FALLBACK_TYPE, relaxedPool, mustPlay);
@@ -434,7 +434,14 @@ export function generateBracket(input: BracketGenerationInput): BracketGeneratio
       }
 
       if (!picked) {
-        warnings.push(`${round}라운드 코트${court + 1}: 조건에 맞는 대진을 만들지 못했습니다.`);
+        // 쿼터를 채운 선수가 많아져 남은 인원으로는 대진을 만들 수 없는 경우:
+        // 억지로 채우지 않고 자유 랠리 연습으로 안내한다 (경고가 아니라 정상 동작).
+        const remainingPool = states.filter((s) => notPlayingYet(s) && !quotaDone.has(s.player.roomParticipantId));
+        if (maxGamesPerPlayer != null && remainingPool.length < minTotalNeeded) {
+          freePracticeSlots.push({ courtIndex: court, roundNo: round });
+        } else {
+          warnings.push(`${round}라운드 코트${court + 1}: 조건에 맞는 대진을 만들지 못했습니다.`);
+        }
         continue;
       }
 

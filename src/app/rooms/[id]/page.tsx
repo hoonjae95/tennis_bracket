@@ -202,7 +202,7 @@ export default async function RoomDetailPage({
                           <span className="w-12 shrink-0 text-zinc-400">R{roundNo}</span>
                           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                             {maleResting.length > 0 && (
-                              <span className={`truncate whitespace-nowrap ${GENDER_TEXT_COLOR.male}`}>
+                              <span className={`break-words ${GENDER_TEXT_COLOR.male}`}>
                                 {maleResting.map((p, i) => (
                                   <span key={p.id}>
                                     {i > 0 && " · "}
@@ -212,7 +212,7 @@ export default async function RoomDetailPage({
                               </span>
                             )}
                             {femaleResting.length > 0 && (
-                              <span className={`truncate whitespace-nowrap ${GENDER_TEXT_COLOR.female}`}>
+                              <span className={`break-words ${GENDER_TEXT_COLOR.female}`}>
                                 {femaleResting.map((p, i) => (
                                   <span key={p.id}>
                                     {i > 0 && " · "}

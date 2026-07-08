@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { generateBracket } from "@/lib/bracket/generate";
+import { generateBracket, computeConsecutivePlayNotes } from "@/lib/bracket/generate";
 import { calcSlotsPerCourt, calcRoundTimeRange, calcWarmupTimeRange, calcWrapupTimeRange } from "@/lib/rooms/game-calc";
 import { saveBracket } from "@/lib/bracket/actions";
 import {
@@ -13,6 +13,7 @@ import {
   GENDER_TEXT_COLOR,
   minGenderCounts,
   isDoubles,
+  playersPerTeam,
   type BracketPlayer,
   type FairnessMode,
   type FreePracticeSlot,
@@ -91,6 +92,8 @@ export function BracketBuilder({
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
+  // 수동 편집 모드: 랜덤 생성 없이 빈 틀만 만들고 관리자가 코트/라운드별로 경기종류·선수를 직접 채운다.
+  const [isManualMode, setIsManualMode] = useState(false);
   // 코트 예약 자체는 room.startTime~endTime 그대로지만, 참가자가 늦게 다 모이는 등의 이유로
   // 실제 대진표 생성은 다른 시각부터 시작하고 싶을 때 이 값만 바꿔서 재계산한다. (방 정보 자체는 수정하지 않음)
   const roomStartTime = roundToNearestFiveMinutes(room.startTime.slice(0, 5));
@@ -158,10 +161,71 @@ export function BracketBuilder({
       fairnessMode: room.fairnessMode,
       ...(room.maxGamesPerPlayer != null ? { maxGamesPerPlayer: room.maxGamesPerPlayer } : {}),
     });
+    setIsManualMode(false);
     setGenerated(result.matches);
     setFreePracticeSlots(result.freePracticeSlots);
     setRestingPlayersByRound(result.restingPlayersByRound);
     setWarnings(result.warnings);
+    setSaveMessage(null);
+  }
+
+  // 빈 틀만 만들고 관리자가 코트/라운드별로 경기종류·선수를 직접 채우도록 한다.
+  function handleStartManual() {
+    const defaultType = availableMatchTypes[0] ?? "mixed_any_doubles";
+    const emptyMatches: GeneratedMatch[] = [];
+    for (let court = 0; court < courts.length; court++) {
+      for (let round = 1; round <= slotsPerCourt; round++) {
+        emptyMatches.push({
+          courtIndex: court,
+          roundNo: round,
+          matchType: defaultType,
+          team1: [],
+          team2: [],
+        });
+      }
+    }
+    setIsManualMode(true);
+    setGenerated(emptyMatches);
+    setFreePracticeSlots([]);
+    setRestingPlayersByRound([]);
+    setWarnings([]);
+    setSaveMessage(null);
+  }
+
+  // 수동 편집: 특정 슬롯의 경기 종류를 바꾼다. 팀 인원 수가 달라지면 넘치는 자리는 비운다.
+  function handleManualTypeChange(courtIndex: number, roundNo: number, type: MatchType) {
+    if (!generated) return;
+    const perTeam = playersPerTeam(type);
+    setGenerated(
+      generated.map((m) =>
+        m.courtIndex === courtIndex && m.roundNo === roundNo
+          ? { ...m, matchType: type, team1: m.team1.slice(0, perTeam), team2: m.team2.slice(0, perTeam) }
+          : m
+      )
+    );
+    setSaveMessage(null);
+  }
+
+  // 수동 편집: 특정 슬롯의 팀 내 자리에 선수를 배정(빈 값이면 배정 해제).
+  function handleManualPlayerChange(
+    courtIndex: number,
+    roundNo: number,
+    team: 1 | 2,
+    slotIdx: number,
+    roomParticipantId: string
+  ) {
+    if (!generated) return;
+    const player = roomParticipantId ? players.find((p) => p.roomParticipantId === roomParticipantId) ?? null : null;
+    setGenerated(
+      generated.map((m) => {
+        if (m.courtIndex !== courtIndex || m.roundNo !== roundNo) return m;
+        const key = team === 1 ? "team1" : "team2";
+        const nextTeam = [...m[key]];
+        if (player) nextTeam[slotIdx] = player;
+        else nextTeam.splice(slotIdx, 1);
+        return { ...m, [key]: nextTeam };
+      })
+    );
     setSaveMessage(null);
   }
 
@@ -173,12 +237,23 @@ export function BracketBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 수동 편집 중 아직 선수가 다 안 채워진 슬롯 (팀별 필요 인원 미달)
+  const incompleteManualSlots = useMemo(() => {
+    if (!isManualMode || !generated) return [];
+    return generated.filter((m) => {
+      const perTeam = playersPerTeam(m.matchType);
+      return m.team1.length < perTeam || m.team2.length < perTeam;
+    });
+  }, [isManualMode, generated]);
+
   function handleSave() {
     if (!generated) return;
+    // 수동 모드에서 아직 선수를 안 채운 슬롯은 저장 대상에서 제외한다 (자유 랠리 연습으로 취급하지 않고 그냥 미배정 상태로 둠).
+    const toSave = isManualMode ? generated.filter((m) => !incompleteManualSlots.includes(m)) : generated;
     startSaving(async () => {
       const result = await saveBracket(
         roomId,
-        generated,
+        toSave,
         courts.map((c) => c.id)
       );
       setSaveMessage(result.success ? "저장되었습니다." : `저장 실패: ${result.error}`);
@@ -219,6 +294,60 @@ export function BracketBuilder({
     for (const arr of map.values()) arr.sort((a, b) => a.roundNo - b.roundNo);
     return map;
   }, [freePracticeSlots]);
+
+  // 수동 편집 모드에서 실시간으로 계산하는 유의사항 (막지 않고 경고만 표시)
+  const manualWarnings = useMemo(() => {
+    if (!isManualMode || !generated) return [];
+    const result: string[] = [];
+    const nameById = new Map(players.map((p) => [p.roomParticipantId, p.name]));
+
+    // 같은 라운드 중복 배정 (한 선수가 같은 라운드 여러 코트/슬롯에 배정)
+    const byRound = new Map<number, Map<string, number>>();
+    for (const m of generated) {
+      const countMap = byRound.get(m.roundNo) ?? new Map<string, number>();
+      for (const p of [...m.team1, ...m.team2]) {
+        countMap.set(p.roomParticipantId, (countMap.get(p.roomParticipantId) ?? 0) + 1);
+      }
+      byRound.set(m.roundNo, countMap);
+    }
+    for (const [roundNo, countMap] of [...byRound.entries()].sort((a, b) => a[0] - b[0])) {
+      for (const [id, count] of countMap) {
+        if (count > 1) {
+          result.push(`R${roundNo}: ${nameById.get(id) ?? id}님이 같은 라운드에 ${count}번 중복 배정되어 있습니다.`);
+        }
+      }
+    }
+
+    // 연속 출전 (MAX_CONSECUTIVE_PLAY 초과)
+    const notesByMatch = computeConsecutivePlayNotes(generated.filter((m) => m.team1.length > 0 || m.team2.length > 0));
+    for (const [match, notes] of notesByMatch) {
+      for (const note of notes) {
+        result.push(`R${match.roundNo}: ${note.names.join(", ")}님이 ${note.consecutiveCount}경기 연속 출전 중입니다.`);
+      }
+    }
+
+    // 경기 수 편차
+    const statsMap = new Map<string, number>();
+    for (const m of generated) {
+      for (const p of [...m.team1, ...m.team2]) {
+        statsMap.set(p.roomParticipantId, (statsMap.get(p.roomParticipantId) ?? 0) + 1);
+      }
+    }
+    const counts = players.map((p) => statsMap.get(p.roomParticipantId) ?? 0);
+    if (counts.length > 0) {
+      const max = Math.max(...counts);
+      const min = Math.min(...counts);
+      if (max - min > 1) {
+        const maxNames = players.filter((p) => (statsMap.get(p.roomParticipantId) ?? 0) === max).map((p) => p.name);
+        const minNames = players.filter((p) => (statsMap.get(p.roomParticipantId) ?? 0) === min).map((p) => p.name);
+        result.push(
+          `경기 수 편차가 ${max - min}경기입니다 (최다 ${max}경기: ${maxNames.join(", ")} / 최소 ${min}경기: ${minNames.join(", ")}).`
+        );
+      }
+    }
+
+    return result;
+  }, [isManualMode, generated, players]);
 
   const sortedRestingPlayersByRound = useMemo(
     () => [...restingPlayersByRound].sort((a, b) => a.roundNo - b.roundNo),
@@ -305,7 +434,7 @@ export function BracketBuilder({
           참가자 {players.length}명 · 코트 {courts.length}개 · 코트당 {slotsPerCourt}경기 (총{" "}
           {slotsPerCourt * courts.length}경기)
         </p>
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => handleGenerate()}
@@ -314,7 +443,17 @@ export function BracketBuilder({
           >
             대진표 생성 (랜덤)
           </button>
-          <span className="text-xs text-zinc-500">다시 랜덤으로 돌리려면 선택해주세요</span>
+          <button
+            type="button"
+            onClick={handleStartManual}
+            disabled={courts.length === 0 || slotsPerCourt === 0}
+            className="rounded-md border border-emerald-700 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+          >
+            빈 틀로 시작 (수동 편성)
+          </button>
+          <span className="text-xs text-zinc-500">
+            {isManualMode ? "코트/라운드별로 경기 종류와 선수를 직접 선택하세요" : "다시 랜덤으로 돌리려면 선택해주세요"}
+          </span>
         </div>
       </div>
 
@@ -325,6 +464,23 @@ export function BracketBuilder({
               <li key={i}>{w}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {isManualMode && manualWarnings.length > 0 && (
+        <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+          <p className="mb-1 font-medium">유의사항 (저장을 막지는 않습니다)</p>
+          <ul className="list-disc pl-4">
+            {manualWarnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {isManualMode && incompleteManualSlots.length > 0 && (
+        <div className="rounded-md bg-zinc-100 p-3 text-sm text-zinc-600">
+          아직 선수가 다 채워지지 않은 경기 {incompleteManualSlots.length}개는 저장 시 제외됩니다.
         </div>
       )}
 
@@ -417,7 +573,18 @@ export function BracketBuilder({
                     {warmup && <TimeBadgeRow label="몸풀기" start={warmup.start} end={warmup.end} />}
                     {rows.map((row, i) =>
                       row.kind === "match" ? (
-                        <MatchRow key={i} match={row.match} timeLabel={roundTimeLabel(row.roundNo)} />
+                        <MatchRow
+                          key={i}
+                          match={row.match}
+                          timeLabel={roundTimeLabel(row.roundNo)}
+                          editable={isManualMode}
+                          availableTypes={availableMatchTypes}
+                          players={players}
+                          onTypeChange={(type) => handleManualTypeChange(row.match.courtIndex, row.match.roundNo, type)}
+                          onPlayerChange={(team, slotIdx, id) =>
+                            handleManualPlayerChange(row.match.courtIndex, row.match.roundNo, team, slotIdx, id)
+                          }
+                        />
                       ) : (
                         <FreePracticeRow key={i} roundNo={row.roundNo} timeLabel={roundTimeLabel(row.roundNo)} />
                       )
@@ -461,9 +628,69 @@ export function BracketBuilder({
   );
 }
 
-function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: string }) {
+function MatchRow({
+  match,
+  timeLabel,
+  editable,
+  availableTypes,
+  players,
+  onTypeChange,
+  onPlayerChange,
+}: {
+  match: GeneratedMatch;
+  timeLabel: string;
+  editable?: boolean;
+  availableTypes?: MatchType[];
+  players?: BracketPlayer[];
+  onTypeChange?: (type: MatchType) => void;
+  onPlayerChange?: (team: 1 | 2, slotIdx: number, roomParticipantId: string) => void;
+}) {
   const t1sum = match.team1.reduce((s, p) => s + GRADE_SCORE[p.grade], 0);
   const t2sum = match.team2.reduce((s, p) => s + GRADE_SCORE[p.grade], 0);
+
+  if (editable && availableTypes && players && onTypeChange && onPlayerChange) {
+    const perTeam = playersPerTeam(match.matchType);
+    return (
+      <li className="flex flex-col gap-2 py-2 text-xs sm:text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-8 shrink-0 text-[11px] text-zinc-400 sm:w-16 sm:text-sm">R{match.roundNo}</span>
+          <span className="shrink-0 whitespace-nowrap text-[11px] text-zinc-400 sm:text-xs">{timeLabel}</span>
+          <select
+            aria-label="경기 종류"
+            value={match.matchType}
+            onChange={(e) => onTypeChange(e.target.value as MatchType)}
+            className="rounded-md border border-zinc-300 px-2 py-1 text-xs sm:text-sm"
+          >
+            {availableTypes.map((t) => (
+              <option key={t} value={t}>
+                {MATCH_TYPE_LABEL[t]}
+              </option>
+            ))}
+          </select>
+          <span className="text-[10px] text-zinc-400 sm:text-xs">
+            페어 점수 {t1sum} : {t2sum}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <TeamSlots
+            team={1}
+            perTeam={perTeam}
+            current={match.team1}
+            allPlayers={players}
+            onChange={(slotIdx, id) => onPlayerChange(1, slotIdx, id)}
+          />
+          <span className="text-xs text-zinc-400">vs</span>
+          <TeamSlots
+            team={2}
+            perTeam={perTeam}
+            current={match.team2}
+            allPlayers={players}
+            onChange={(slotIdx, id) => onPlayerChange(2, slotIdx, id)}
+          />
+        </div>
+      </li>
+    );
+  }
 
   return (
     <li className="flex flex-col py-2 text-xs sm:text-sm">
@@ -518,6 +745,45 @@ function MatchRow({ match, timeLabel }: { match: GeneratedMatch; timeLabel: stri
         </p>
       )}
     </li>
+  );
+}
+
+function TeamSlots({
+  team,
+  perTeam,
+  current,
+  allPlayers,
+  onChange,
+}: {
+  team: 1 | 2;
+  perTeam: number;
+  current: BracketPlayer[];
+  allPlayers: BracketPlayer[];
+  onChange: (slotIdx: number, roomParticipantId: string) => void;
+}) {
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {Array.from({ length: perTeam }, (_, slotIdx) => {
+        const selected = current[slotIdx]?.roomParticipantId ?? "";
+        return (
+          <select
+            key={slotIdx}
+            aria-label={`팀${team} 선수 ${slotIdx + 1}`}
+            value={selected}
+            onChange={(e) => onChange(slotIdx, e.target.value)}
+            className="min-w-0 max-w-[7rem] rounded-md border border-zinc-300 px-1.5 py-1 text-xs sm:max-w-none sm:text-sm"
+          >
+            <option value="">선수 선택</option>
+            {allPlayers.map((p) => (
+              <option key={p.roomParticipantId} value={p.roomParticipantId}>
+                {p.name}
+                {p.isGuest ? " (게스트)" : ""}
+              </option>
+            ))}
+          </select>
+        );
+      })}
+    </span>
   );
 }
 

@@ -40,3 +40,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE (IntelliJ)
+.idea/
+*.iml
+
+# 클럽 회원 실명이 포함된 요구사항 메모 (공개 저장소 제외)
+요구사항_정리.md
+요구사항.txt
